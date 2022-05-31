@@ -13,3 +13,5 @@ pywin32-ctypes==0.2.0
 pywinauto==0.6.8
 six==1.16.0
 yarl==1.7.2
+
+colorama~=0.4.4

@@ -1,6 +1,6 @@
 import asyncio
 import configparser
-import datetime
+from datetime import datetime
 import json
 import logging
 import os
@@ -21,14 +21,12 @@ Calculating aspect ratios
 x = measured x coordinate / total pixel width (ex: 500/1280)
 y = measured y coordinate / total pixel height (ex: 300/720)
 """
-
 TEAMVIEWER = (0.59562272, 0.537674419)
 START = (0.49975574, 0.863596872)
 HOST = (0.143624817, 0.534317984)
 RUN = (0.497313141, 0.748913988)
 ACCEPT1 = (0.424035173, 0.544743701)
 ACCEPT2 = (0.564240352, 0.67593397)
-
 INVITE = (0.8390625, 0.281944444)
 EXIT = (0.66171875, 0.041666667)
 
@@ -40,11 +38,16 @@ logging.basicConfig(filename='logs.log',
 log = logging.getLogger()
 log.setLevel(logging.DEBUG)
 
+DOWNLOAD_MESSAGE = "**The server has started downloading an update, and will go down once it starts installing.**"
+INSTALL_MESSAGE = "**The server has started installing the update. Stand by...**"
+COMPLETED_MESSAGE = "**The server has finished installing the update.**"
+
 user = os.environ['USERPROFILE']
-appdata = "\\AppData\\Local\\Packages\\StudioWildcard.4558480580BB9_1w2mm55455e38\\LocalState\\Saved\\UWPConfig\\UWP"
-TARGET = f"{user}{appdata}"
+MAIN = f"{os.environ['LOCALAPPDATA']}/Packages/StudioWildcard.4558480580BB9_1w2mm55455e38/LocalState/Saved"
+TARGET = f"{MAIN}/UWPConfig/UWP"
 ARK_BOOT = "explorer.exe shell:appsFolder\StudioWildcard.4558480580BB9_1w2mm55455e38!AppARKSurvivalEvolved"
 XAPP = "explorer.exe shell:appsFolder\Microsoft.XboxApp_8wekyb3d8bbwe!Microsoft.XboxApp"
+
 LOGO = """
                 _    _    _                 _ _           
      /\        | |  | |  | |               | | |          
@@ -298,7 +301,7 @@ class ArkHandler:
     async def pull_events(self):
         server = 'localhost'
         logtype = 'System'
-        now = datetime.datetime.now()
+        now = datetime.now()
         hand = win32evtlog.OpenEventLog(server, logtype)
         flags = win32evtlog.EVENTLOG_SEQUENTIAL_READ | win32evtlog.EVENTLOG_BACKWARDS_READ
         events = win32evtlog.ReadEventLog(hand, flags, 0)
@@ -391,27 +394,141 @@ class ArkHandler:
                             await asyncio.sleep(5)
             self.checking_updates = False
 
+    async def wipe_checker(self):
+        while True:
+            if not AUTOWIPE or not WIPETIMES:
+                await asyncio.sleep(30)
+                continue
+            now = datetime.now()
+            for ts in WIPETIMES:
+                time = datetime.strptime(ts, "%m/%d %H:%M")
+                if time.month != now.month:
+                    continue
+                if time.day != now.day:
+                    continue
+                if time.hour != now.hour:
+                    continue
+                td = time.minute - now.minute
 
+                if td == 0:
+                    await self.wipe(CLUSTERWIPE)
+                    await asyncio.sleep(60)
+                    break
+            else:
+                await asyncio.sleep(5)
+
+    async def wipe(self, wipe_cluster_data):
+        print(Fore.RED + "WIPING MAP")
+        log.warning("WIPING MAP")
+        self.booting = True
+        await self.kill_ark()
+        if wipe_cluster_data:
+            print(Fore.RED + "WIPING CLUSTER DATA")
+            log.warning("WIPING CLUSTER DATA")
+            cpath = f"{MAIN}/clusters/solecluster/"
+            if not os.listdir(cpath):
+                pass
+            else:
+                for cname in os.listdir(cpath):
+                    if "sync" in cname:
+                        continue
+                    os.remove(os.path.join(cpath, cname))
+
+        maps = f"{MAIN}/Maps"
+        for foldername in os.listdir(maps):
+            if "ClientPaintingsCache" in foldername:
+                continue
+            if "sync" in foldername:
+                continue
+            mapfolder = f"{maps}/{foldername}"
+
+            # Only the island has no subfolder
+            subfolder = True
+            if foldername == "SavedArks":
+                subfolder = False
+
+            if not subfolder:
+                mapcontents = os.listdir(mapfolder)
+            else:
+                mapfolder = f"{mapfolder}/{os.listdir(mapfolder)[0]}"
+                mapcontents = os.listdir(mapfolder)
+
+            for item in mapcontents:
+                if "ServerPaintingsCache" in item:
+                    continue
+                if "BanList" in item:
+                    continue
+                if os.path.isdir(os.path.join(mapfolder, item)):
+                    continue
+                os.remove(os.path.join(mapfolder, item))
+        self.booting = False
+        print(Fore.CYAN + "WIPE COMPLETE")
+        log.warning("WIPE COMPLETE")
+
+
+default = """
+# Create a webhook URL for the discord channel this rig hosts and paste it in the quotes to have the bot send update alerts.
+# The webhook messages can also be configured below.
+
+# The Path settings is the folder path to your backup ini files if you have them (gameusersettings.ini and game.ini). 
+# When ArkHandler reboots the server,
+# it will pull the newest ini files from those paths and inject them into your appdata settings.
+
+# Wipe times should always be "mm/dd HH:MM" separated by a comma with NO spaces, like 04/10 12:30,08/20 17:00
+
+[UserSettings]
+WebhookURL = ""
+GameiniPath = ""
+GameUserSettingsiniPath = ""
+AutoWipe = False
+AlsoWipeClusterData = False
+WipeTimes = 
+"""
+if not os.path.exists("config.ini"):
+    print(Fore.RED + f"Config not found! Creating a new one!")
+    log.warning(f"Config not found! Creating a new one!")
+    with open("config.ini", "w") as f:
+        f.write(default)
+Config = configparser.ConfigParser()
+Config.read("config.ini")
 try:
-    Config = configparser.ConfigParser()
-    Config.read("config.ini")
     WEBHOOK_URL = Config.get("UserSettings", "webhookurl").strip('\"')
-    DOWNLOAD_MESSAGE = Config.get("UserSettings", "downloadmessage").strip('\"')
-    INSTALL_MESSAGE = Config.get("UserSettings", "installmessage").strip('\"')
-    COMPLETED_MESSAGE = Config.get("UserSettings", "completedmessage").strip('\"')
     GAME_SOURCE = Config.get("UserSettings", "gameinipath").strip('\"')
     GAMEUSERSETTINGS_SOURCE = Config.get("UserSettings", "gameusersettingsinipath").strip('\"')
-    print(Fore.WHITE + f"Config importing:\n{GAME_SOURCE}\n{GAMEUSERSETTINGS_SOURCE}")
-except Exception as e:
-    print(Fore.RED + f"Config failed to import!\nError: {e}")
-    log.warning(f"Config failed to import!\nError: {e}")
+    AUTOWIPE = Config.get("UserSettings", "autowipe").strip('\"')
+    CLUSTERWIPE = Config.get("UserSettings", "alsowipeclusterdata").strip('\"')
+    WIPETIMES = Config.get("UserSettings", "wipetimes")
+except configparser.NoOptionError:
+    print(Fore.RED + f"Config failed to read! Creating a new one!")
+    log.warning(f"Config failed to read! Creating a new one!")
+    with open("config.ini", "w") as f:
+        f.write(default)
+    Config.read("config.ini")
+    WEBHOOK_URL = Config.get("UserSettings", "webhookurl").strip('\"')
+    GAME_SOURCE = Config.get("UserSettings", "gameinipath").strip('\"')
+    GAMEUSERSETTINGS_SOURCE = Config.get("UserSettings", "gameusersettingsinipath").strip('\"')
+    AUTOWIPE = Config.get("UserSettings", "autowipe").strip('\"')
+    CLUSTERWIPE = Config.get("UserSettings", "alsowipeclusterdata").strip('\"')
+    WIPETIMES = Config.get("UserSettings", "wipetimes").strip('\"')
 
-loop = asyncio.get_event_loop()
+
+if "t" in AUTOWIPE.lower():
+    AUTOWIPE = True
+else:
+    AUTOWIPE = False
+if "t" in CLUSTERWIPE.lower():
+    CLUSTERWIPE = True
+else:
+    CLUSTERWIPE = False
+WIPETIMES = WIPETIMES.split(",")
+
+loop = asyncio.new_event_loop()
 at = ArkHandler()
 try:
-    asyncio.ensure_future(at.event_puller())
-    asyncio.ensure_future(at.watchdog())
-    asyncio.ensure_future(at.update_checker())
+    loop.create_task(at.watchdog())
+    loop.create_task(at.event_puller())
+    loop.create_task(at.update_checker())
+    loop.create_task(at.wipe_checker())
     loop.run_forever()
 finally:
     loop.close()
