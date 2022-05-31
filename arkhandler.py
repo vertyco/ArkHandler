@@ -65,6 +65,7 @@ LOGO = """
 """
 colorama.init()
 print(Fore.GREEN + LOGO)
+print(Fore.GREEN + "Version: 2.0.1")
 
 
 def window_enumeration_handler(hwnd, windows):

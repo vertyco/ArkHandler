@@ -14,7 +14,7 @@ I am not currently providing direct support for this script.
 
 
 # How To Setup
-To use ArkHandler, you just need to download the executable from my latest releases.
+To use ArkHandler, you just need to download ArkHandler.exe from my [latest releases](https://github.com/vertyco/ArkHandler/releases).
 ```ini
 1. download the .exe from latest releases
 2. place anywhere you like
