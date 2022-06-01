@@ -1,10 +1,10 @@
 import asyncio
 import configparser
-from datetime import datetime
 import json
 import logging
 import os
 import shutil
+from datetime import datetime
 
 import aiohttp
 import colorama
@@ -67,6 +67,25 @@ colorama.init()
 print(Fore.GREEN + LOGO)
 print(Fore.GREEN + "Version: 2.0.1")
 
+DEFAULT = """
+# Create a webhook URL for the discord channel this rig hosts and paste it in the quotes to have the bot send update alerts.
+# The webhook messages can also be configured below.
+
+# The Path settings is the folder path to your backup ini files if you have them (gameusersettings.ini and game.ini). 
+# When ArkHandler reboots the server,
+# it will pull the newest ini files from those paths and inject them into your appdata settings.
+
+# Wipe times should always be "mm/dd HH:MM" separated by a comma with NO spaces, like 04/10 12:30,08/20 17:00
+
+[UserSettings]
+WebhookURL = ""
+GameiniPath = ""
+GameUserSettingsiniPath = ""
+AutoWipe = False
+AlsoWipeClusterData = False
+WipeTimes = 
+"""
+
 
 def window_enumeration_handler(hwnd, windows):
     windows.append((hwnd, win32gui.GetWindowText(hwnd)))
@@ -86,11 +105,57 @@ class ArkHandler:
 
         self.top_windows = []
 
-    @staticmethod
-    async def import_config():
-        if GAME_SOURCE != "":
-            if os.path.exists(GAME_SOURCE) and os.path.exists(TARGET):
-                s_file = os.path.join(GAME_SOURCE, "Game.ini")
+        self.cf = configparser.ConfigParser()
+        self.config = {
+            "webhook": "",
+            "game": "",
+            "gameuser": "",
+            "autowipe": False,
+            "clusterwipe": False,
+            "wipetimes": []
+        }
+
+    def pull_config(self):
+        self.cf.read("config.ini")
+        while True:
+            try:
+                self.config = {
+                    "webhook": self.cf.get("UserSettings", "webhookurl").strip('\"'),
+                    "game": self.cf.get("UserSettings", "gameinipath").strip('\"'),
+                    "gameuser": self.cf.get("UserSettings", "gameusersettingsinipath").strip('\"'),
+                    "autowipe": self.cf.get("UserSettings", "autowipe").strip('\"'),
+                    "clusterwipe": self.cf.get("UserSettings", "alsowipeclusterdata").strip('\"'),
+                    "wipetimes": self.cf.get("UserSettings", "wipetimes")
+                }
+                if "t" in self.config["autowipe"].lower():
+                    self.config["autowipe"] = True
+                else:
+                    self.config["autowipe"] = False
+                if "t" in self.config["clusterwipe"].lower():
+                    self.config["clusterwipe"] = True
+                else:
+                    self.config["clusterwipe"] = False
+                self.config["wipetimes"] = self.config["wipetimes"].split(",")
+                break
+            except configparser.NoOptionError:
+                print(Fore.RED + f"Config failed to read! Creating a new one!")
+                log.warning(f"Config failed to read! Creating a new one!")
+                try:
+                    with open("config.ini", "w") as f:
+                        f.write(DEFAULT)
+                except Exception as e:
+                    print(f"Cant write default config!!: {e}")
+                    break
+                continue
+            except Exception as e:
+                print(Fore.RED + f"Failed to pull config: {e}")
+                log.warning(f"Failed to pull config: {e}")
+                break
+
+    async def sync_config(self):
+        if self.config["game"]:
+            if os.path.exists(self.config["game"]) and os.path.exists(TARGET):
+                s_file = os.path.join(self.config["game"], "Game.ini")
                 t_file = os.path.join(TARGET, "Game.ini")
                 if os.path.exists(t_file):
                     try:
@@ -107,9 +172,9 @@ class ArkHandler:
                 print(Fore.CYAN + "Game.ini synced.")
 
         # sync GameUserSettings.ini file
-        if GAMEUSERSETTINGS_SOURCE != "":
-            if os.path.exists(GAMEUSERSETTINGS_SOURCE) and os.path.exists(TARGET):
-                s_file = os.path.join(GAMEUSERSETTINGS_SOURCE, "GameUserSettings.ini")
+        if self.config["gameuser"]:
+            if os.path.exists(self.config["gameuser"]) and os.path.exists(TARGET):
+                s_file = os.path.join(self.config["gameuser"], "GameUserSettings.ini")
                 t_file = os.path.join(TARGET, "GameUserSettings.ini")
                 if os.path.exists(t_file):
                     try:
@@ -156,9 +221,8 @@ class ArkHandler:
         else:
             pywinauto.mouse.click(button='left', coords=(int(x_click), int(y_click)))
 
-    @staticmethod
-    async def send_hook(title, message, color, msg=None):
-        if not WEBHOOK_URL:
+    async def send_hook(self, title, message, color, msg=None):
+        if not self.config["webhook"]:
             return
         if msg:
             data = {"username": "ArkHandler", "avatar_url": "https://i.imgur.com/Wv5SsBo.png", "embeds": [
@@ -185,7 +249,7 @@ class ArkHandler:
             async with aiohttp.ClientSession() as session:
                 timeout = aiohttp.ClientTimeout(total=20)
                 async with session.post(
-                        url=WEBHOOK_URL,
+                        url=self.config["webhook"],
                         data=json.dumps(data),
                         headers=headers,
                         timeout=timeout) as res:
@@ -246,7 +310,7 @@ class ArkHandler:
                 if not self.updating and not self.checking_updates and not self.booting:
                     print(Fore.RED + "Ark is not Running! Beginning reboot sequence...")
                     try:
-                        await self.import_config()
+                        await self.sync_config()
                         await self.send_hook("Server Down", "Beginning reboot sequence...", 16739584)
                         await self.boot_ark()
                     except Exception as e:
@@ -397,11 +461,11 @@ class ArkHandler:
 
     async def wipe_checker(self):
         while True:
-            if not AUTOWIPE or not WIPETIMES:
+            if not self.config["autowipe"] or not self.config["wipetimes"]:
                 await asyncio.sleep(30)
                 continue
             now = datetime.now()
-            for ts in WIPETIMES:
+            for ts in self.config["wipetimes"]:
                 time = datetime.strptime(ts, "%m/%d %H:%M")
                 if time.month != now.month:
                     continue
@@ -412,7 +476,7 @@ class ArkHandler:
                 td = time.minute - now.minute
 
                 if td == 0:
-                    await self.wipe(CLUSTERWIPE)
+                    await self.wipe(self.config["clusterwipe"])
                     await asyncio.sleep(60)
                     break
             else:
@@ -466,70 +530,21 @@ class ArkHandler:
         print(Fore.CYAN + "WIPE COMPLETE")
         log.warning("WIPE COMPLETE")
 
+    async def config_puller(self):
+        while True:
+            await asyncio.sleep(300)
+            self.pull_config()
 
-default = """
-# Create a webhook URL for the discord channel this rig hosts and paste it in the quotes to have the bot send update alerts.
-# The webhook messages can also be configured below.
-
-# The Path settings is the folder path to your backup ini files if you have them (gameusersettings.ini and game.ini). 
-# When ArkHandler reboots the server,
-# it will pull the newest ini files from those paths and inject them into your appdata settings.
-
-# Wipe times should always be "mm/dd HH:MM" separated by a comma with NO spaces, like 04/10 12:30,08/20 17:00
-
-[UserSettings]
-WebhookURL = ""
-GameiniPath = ""
-GameUserSettingsiniPath = ""
-AutoWipe = False
-AlsoWipeClusterData = False
-WipeTimes = 
-"""
-if not os.path.exists("config.ini"):
-    print(Fore.RED + f"Config not found! Creating a new one!")
-    log.warning(f"Config not found! Creating a new one!")
-    with open("config.ini", "w") as f:
-        f.write(default)
-Config = configparser.ConfigParser()
-Config.read("config.ini")
-try:
-    WEBHOOK_URL = Config.get("UserSettings", "webhookurl").strip('\"')
-    GAME_SOURCE = Config.get("UserSettings", "gameinipath").strip('\"')
-    GAMEUSERSETTINGS_SOURCE = Config.get("UserSettings", "gameusersettingsinipath").strip('\"')
-    AUTOWIPE = Config.get("UserSettings", "autowipe").strip('\"')
-    CLUSTERWIPE = Config.get("UserSettings", "alsowipeclusterdata").strip('\"')
-    WIPETIMES = Config.get("UserSettings", "wipetimes")
-except configparser.NoOptionError:
-    print(Fore.RED + f"Config failed to read! Creating a new one!")
-    log.warning(f"Config failed to read! Creating a new one!")
-    with open("config.ini", "w") as f:
-        f.write(default)
-    Config.read("config.ini")
-    WEBHOOK_URL = Config.get("UserSettings", "webhookurl").strip('\"')
-    GAME_SOURCE = Config.get("UserSettings", "gameinipath").strip('\"')
-    GAMEUSERSETTINGS_SOURCE = Config.get("UserSettings", "gameusersettingsinipath").strip('\"')
-    AUTOWIPE = Config.get("UserSettings", "autowipe").strip('\"')
-    CLUSTERWIPE = Config.get("UserSettings", "alsowipeclusterdata").strip('\"')
-    WIPETIMES = Config.get("UserSettings", "wipetimes").strip('\"')
-
-
-if "t" in AUTOWIPE.lower():
-    AUTOWIPE = True
-else:
-    AUTOWIPE = False
-if "t" in CLUSTERWIPE.lower():
-    CLUSTERWIPE = True
-else:
-    CLUSTERWIPE = False
-WIPETIMES = WIPETIMES.split(",")
 
 loop = asyncio.new_event_loop()
 at = ArkHandler()
+at.pull_config()
 try:
     loop.create_task(at.watchdog())
     loop.create_task(at.event_puller())
     loop.create_task(at.update_checker())
     loop.create_task(at.wipe_checker())
+    loop.create_task(at.config_puller())
     loop.run_forever()
 finally:
     loop.close()
