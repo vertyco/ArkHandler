@@ -116,9 +116,9 @@ class ArkHandler:
         }
 
     def pull_config(self):
-        self.cf.read("config.ini")
         while True:
             try:
+                self.cf.read("config.ini")
                 self.config = {
                     "webhook": self.cf.get("UserSettings", "webhookurl").strip('\"'),
                     "game": self.cf.get("UserSettings", "gameinipath").strip('\"'),
@@ -137,7 +137,7 @@ class ArkHandler:
                     self.config["clusterwipe"] = False
                 self.config["wipetimes"] = self.config["wipetimes"].split(",")
                 break
-            except configparser.NoOptionError:
+            except (configparser.NoOptionError, configparser.NoSectionError):
                 print(Fore.RED + f"Config failed to read! Creating a new one!")
                 log.warning(f"Config failed to read! Creating a new one!")
                 try:
