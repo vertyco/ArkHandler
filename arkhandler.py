@@ -5,7 +5,6 @@ import logging
 import os
 import shutil
 from datetime import datetime
-from time import sleep
 
 import aiohttp
 import colorama
@@ -87,7 +86,7 @@ LOGO = """
       |__/                    |__/        
 """
 colorama.init()
-version = "Version: 2.0.3"
+version = "Version: 2.0.4"
 print(f"{Fore.LIGHTCYAN_EX}{LOGO}\n{version}{Fore.RESET}")
 
 DEFAULT = """
@@ -157,13 +156,20 @@ class ArkHandler:
                 if debug:
                     log.debug("Pulling config")
 
+                times = []
+                wipetimes = self.cf.get("UserSettings", "wipetimes").strip()
+                wipetimes = wipetimes.split(",")
+                for t in wipetimes:
+                    t = t.strip()
+                    times.append(t)
+
                 self.config = {
                     "webhook": self.cf.get("UserSettings", "webhookurl").strip('\"'),
                     "game": self.cf.get("UserSettings", "gameinipath").strip('\"'),
                     "gameuser": self.cf.get("UserSettings", "gameusersettingsinipath").strip('\"'),
                     "autowipe": self.cf.get("UserSettings", "autowipe").strip('\"'),
                     "clusterwipe": self.cf.get("UserSettings", "alsowipeclusterdata").strip('\"'),
-                    "wipetimes": self.cf.get("UserSettings", "wipetimes"),
+                    "wipetimes": times,
                     "debug": debug,
                     "pulled": True
                 }
@@ -175,7 +181,6 @@ class ArkHandler:
                     self.config["clusterwipe"] = True
                 else:
                     self.config["clusterwipe"] = False
-                self.config["wipetimes"] = self.config["wipetimes"].split(",")
                 break
             except (configparser.NoOptionError, configparser.NoSectionError):
                 log.warning(f"Config failed to read! Creating a new one!")
@@ -192,6 +197,7 @@ class ArkHandler:
 
     async def sync_config(self):
         if self.config["game"]:
+            log.debug("Syncing Game.ini")
             if os.path.exists(self.config["game"]) and os.path.exists(TARGET):
                 s_file = os.path.join(self.config["game"], "Game.ini")
                 t_file = os.path.join(TARGET, "Game.ini")
@@ -209,6 +215,7 @@ class ArkHandler:
 
         # sync GameUserSettings.ini file
         if self.config["gameuser"]:
+            log.debug("Syncing GameUserSettings.ini")
             if os.path.exists(self.config["gameuser"]) and os.path.exists(TARGET):
                 s_file = os.path.join(self.config["gameuser"], "GameUserSettings.ini")
                 t_file = os.path.join(TARGET, "GameUserSettings.ini")
@@ -258,6 +265,7 @@ class ArkHandler:
     async def send_hook(self, title, message, color, msg=None):
         if not self.config["webhook"]:
             return
+        log.debug(f"Sending WebHook: {title}")
         if msg:
             data = {"username": "ArkHandler", "avatar_url": "https://i.imgur.com/Wv5SsBo.png", "embeds": [
                 {
@@ -342,11 +350,14 @@ class ArkHandler:
                     log.info("Ark is Running.")
                     self.running = True
             else:
+                log.debug("ARK NOT RUNNING")
                 if not self.updating and not self.checking_updates and not self.booting:
                     log.info("Ark is not Running! Beginning reboot sequence...")
                     try:
                         await self.sync_config()
+                        await asyncio.sleep(0.001)
                         await self.send_hook("Server Down", "Beginning reboot sequence...", 16739584)
+                        await asyncio.sleep(0.001)
                         await self.boot_ark()
                     except Exception as e:
                         log.critical(f"Watchdog Error: {e}")
@@ -356,19 +367,27 @@ class ArkHandler:
         self.running = False
         self.booting = True
         if await self.ark():
+            log.debug("Ark already running. Killing...")
             await self.kill_ark()
             await asyncio.sleep(20)
         await asyncio.sleep(5)
         await self.close_tv()
         # start ark
         log.info("Attempting to launch Ark")
-        os.system(ARK_BOOT)
-        await asyncio.sleep(15)
         # make sure ark is actually fucking running and didnt crash
-        if not await self.ark():
-            log.warning("Ark crashed, trying again... (Thanks Wildcard)")
+        tries = 0
+        while True:
+            if tries >= 10:
+                log.critical("ARK IS BEING STUPID AND WONT LAUNCH. TRY REINSTALLING OR RESETTING THE APP.")
+                return
             os.system(ARK_BOOT)
-            await asyncio.sleep(12)
+            await asyncio.sleep(15)
+            if await self.ark():
+                break
+            else:
+                log.warning("Ark crashed, trying again... (Thanks Wildcard)")
+                tries += 1
+                continue
 
         await self.calc_position_click(START, "double")
         await asyncio.sleep(8)
@@ -479,7 +498,7 @@ class ArkHandler:
             self.checking_updates = True
             if not await self.store():
                 os.system("explorer.exe shell:appsFolder\Microsoft.WindowsStore_8wekyb3d8bbwe!App")
-                await asyncio.sleep(3)
+                await asyncio.sleep(4)
             else:
                 program = "microsoft store"
                 self.top_windows = []
