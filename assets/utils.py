@@ -31,13 +31,6 @@ class Const:
         "accept1": (0.418, 0.551),
         "accept2": (0.568, 0.6905)
     }
-    # Images
-    images = {
-        "start": fr"{os.getcwd()}\assets\start.PNG",
-        "host": fr"{os.getcwd()}\assets\host.PNG",
-        "run": fr"{os.getcwd()}\assets\run.PNG",
-        "loaded": fr"{os.getcwd()}\assets\loaded.PNG"
-    }
     # Ark paths
     save_path = fr"{os.environ['LOCALAPPDATA']}\Packages\StudioWildcard.4558480580BB9_1w2mm55455e38\LocalState\Saved"
     boot = r"explorer.exe shell:appsFolder\StudioWildcard.4558480580BB9_1w2mm55455e38!AppARKSurvivalEvolved"
@@ -108,11 +101,11 @@ def on_screen(path: str):
     return pyautogui.locateOnScreen(path, confidence=0.9)
 
 
-def click_button(button: str):
+def click_button(button: str, images: dict):
     """Click an ark button"""
-    if button in Const.images:
+    if button in images:
         while True:
-            loc = on_screen(Const.images[button])
+            loc = on_screen(images[button])
             if loc is not None:
                 break
     else:
@@ -130,13 +123,11 @@ def click_button(button: str):
     wr, hr = (w / 16), (h / 9)
     y_offset = 15
     if wr > hr and (wr - hr) > 1:  # Too wide
-        log.debug("Too wide")
         diff = (w - ((h / 9) * 16)) / 2
         left = left + diff
         right = right - diff
         y_offset += int(diff * 0.01)
     elif wr < hr and (hr - wr) > 1:  # Too tall
-        log.debug("Too tall")
         diff = (h - ((w / 16) * 9)) / 2
         top = top + diff
         bottom = bottom - diff
@@ -265,7 +256,8 @@ def check_updates():
     # Library button
     try:
         library_button = dlg.window(title="Library")
-        library_button.wait("ready")
+
+        library_button.wait("ready", timeout=120, retry_interval=1)
         library_button.click_input()
     except pywinauto.findwindows.ElementAmbiguousError:
         pass
@@ -326,7 +318,7 @@ def launch_ark():
             raise WindowsError("Ark failed to boot and may be corrupt")
 
 
-def start_ark():
+def start_ark(images: dict):
     """Click through menu buttons to start server"""
     close_teamviewer()
     set_resolution()
@@ -337,11 +329,11 @@ def start_ark():
         raise WindowsError("Ark failed to boot and may be corrupt")
     for i in windows:
         win32gui.ShowWindow(i[0], win32con.SW_MAXIMIZE)
-    click_button("start")
-    click_button("host")
-    click_button("run")
-    click_button("accept1")
-    click_button("accept2")
+    click_button("start", images)
+    click_button("host", images)
+    click_button("run", images)
+    click_button("accept1", images)
+    click_button("accept2", images)
     log.info("Boot macro finished, server is loading")
 
 

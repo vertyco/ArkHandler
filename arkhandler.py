@@ -2,6 +2,7 @@ import asyncio
 import functools
 import logging
 import os
+import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from configparser import ConfigParser
@@ -53,6 +54,14 @@ class ArkHandler:
         self.clustewipe = None
         self.wipetimes = None
 
+        # Images
+        self.images = {
+            "start": fr"{os.getcwd()}\assets\start.PNG",
+            "host": fr"{os.getcwd()}\assets\host.PNG",
+            "run": fr"{os.getcwd()}\assets\run.PNG",
+            "loaded": fr"{os.getcwd()}\assets\loaded.PNG"
+        }
+
         # States
         self.running = False  # Ark is running
         self.checking_updates = False  # Checking for updates
@@ -79,6 +88,15 @@ class ArkHandler:
                    f"Clusterwipe: {self.clustewipe}\n" \
                    f"WipeTimes: {self.wipetimes}"
             print(Fore.MAGENTA + info + Fore.RESET)
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            path = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets"))
+            log.debug(f"Running as EXE - {path}")
+            self.images = {
+                "start": fr"{path}\start.PNG",
+                "host": fr"{path}\host.PNG",
+                "run": fr"{path}\run.PNG",
+                "loaded": fr"{path}\loaded.PNG"
+            }
         log.info("Starting task loops")
         self.loop.run_forever()
 
@@ -136,12 +154,12 @@ class ArkHandler:
         await send_webhook(self.hook, "Server Down", "Beginning reboot sequence...", 16739584)
         self.booting = True
         try:
-            await self.execute(functools.partial(start_ark))
+            await self.execute(functools.partial(start_ark, self.images))
             await send_webhook(self.hook, "Booting", "Loading server files...", 19357)
             await asyncio.sleep(10)
             os.system("net stop LicenseManager")
             while True:
-                loc = await self.execute(functools.partial(on_screen, Const.images["loaded"]))
+                loc = await self.execute(functools.partial(on_screen, self.images["loaded"]))
                 if loc is not None:
                     break
             log.info("Reboot complete")
@@ -225,8 +243,14 @@ class ArkHandler:
     async def update_loop(self):
         while True:
             await asyncio.sleep(600)
+            if self.checking_updates:
+                continue
             log.debug("Checking for updates")
-            await self.updates()
+            self.checking_updates = True
+            try:
+                await self.updates()
+            finally:
+                self.checking_updates = False
 
     async def updates(self):
         app = await self.execute(functools.partial(check_updates))

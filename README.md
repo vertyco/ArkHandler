@@ -20,5 +20,4 @@ I am not currently providing direct support for this script.
 3. configure the config.ini file how you want
 4. you are ready to run, just double click ArkHandler.exe to start the app
 
-
 This script is just to make it a little easier to host crossplay ark servers.
