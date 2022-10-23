@@ -1,0 +1,1 @@
+pyinstaller.exe --onefile --console --uac-admin -i=assets\raptor.ico arkhandler.py
