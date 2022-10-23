@@ -1,22 +1,26 @@
 import logging
 
-from colorama import Fore
+import colorama
+from colorama import Fore, Back, Style
+
+colorama.init(autoreset=True)
 
 
 class CustomFormatter(logging.Formatter):
+    bright = Style.BRIGHT
     debug = Fore.LIGHTGREEN_EX
     info = Fore.LIGHTWHITE_EX
     warning = Fore.LIGHTYELLOW_EX
     error = Fore.LIGHTMAGENTA_EX
     crit = Fore.LIGHTRED_EX
-    reset = Fore.RESET
-    format = "%(asctime)s - %(levelname)s - %(message)s"
+    critback = Back.LIGHTYELLOW_EX
+    fmt = "%(asctime)s - %(levelname)s - %(message)s"
     FORMATS = {
-        logging.DEBUG: debug + format + reset,
-        logging.INFO: info + format + reset,
-        logging.WARNING: warning + format + reset,
-        logging.ERROR: error + format + reset,
-        logging.CRITICAL: crit + format + reset
+        logging.DEBUG: bright + debug + fmt,
+        logging.INFO: bright + info + fmt,
+        logging.WARNING: bright + warning + fmt,
+        logging.ERROR: bright + error + fmt,
+        logging.CRITICAL: critback + bright + crit + fmt
     }
 
     def format(self, record):
@@ -41,11 +45,10 @@ def main():
     logger = logging.getLogger("CustomLogger")
     logger.setLevel(logging.DEBUG)
 
-    # create console handler with a higher log level
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    ch.setFormatter(CustomFormatter())
-    logger.addHandler(ch)
+    console = logging.StreamHandler()
+    console.setLevel(logging.DEBUG)
+    console.setFormatter(CustomFormatter())
+    logger.addHandler(console)
 
     logger.debug("debug message")
     logger.info("info message")

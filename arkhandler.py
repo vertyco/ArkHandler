@@ -8,9 +8,10 @@ from concurrent.futures import ThreadPoolExecutor
 from configparser import ConfigParser
 from datetime import datetime
 from pathlib import Path
+from subprocess import call, DEVNULL
 
 import win32evtlog
-from colorama import Fore
+from colorama import Fore, Back, Style
 
 from assets.customlogger import CustomFormatter, StandardFormatter
 from assets.utils import (
@@ -28,20 +29,21 @@ log = logging.getLogger("arkhandler")
 log.setLevel(logging.DEBUG)
 # Console logs
 console = logging.StreamHandler()
-console.setLevel(logging.DEBUG)
 console.setFormatter(CustomFormatter())
 # File logs
 logfile = logging.FileHandler('logs.log')
-logfile.setLevel(logging.DEBUG)
 logfile.setFormatter(StandardFormatter())
+# Add handlers
 log.addHandler(console)
 log.addHandler(logfile)
 
 
 class ArkHandler:
+    __version__ = "3.0.0"
+
     def __init__(self):
         # Handlers
-        self.loop = asyncio.get_event_loop()
+        self.loop = None
         self.threadpool = ThreadPoolExecutor(max_workers=5, thread_name_prefix="arkhandler")
 
         # Config
@@ -55,11 +57,12 @@ class ArkHandler:
         self.wipetimes = None
 
         # Images
+        self.root = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets"))
         self.images = {
-            "start": fr"{os.getcwd()}\assets\start.PNG",
-            "host": fr"{os.getcwd()}\assets\host.PNG",
-            "run": fr"{os.getcwd()}\assets\run.PNG",
-            "loaded": fr"{os.getcwd()}\assets\loaded.PNG"
+            "start": fr"{self.root}\start.PNG",
+            "host": fr"{self.root}\host.PNG",
+            "run": fr"{self.root}\run.PNG",
+            "loaded": fr"{self.root}\loaded.PNG"
         }
 
         # States
@@ -70,9 +73,10 @@ class ArkHandler:
         self.booting = False  # Is booting up
         self.last_update = None  # Time of last event update
 
-    def initialize(self):
-        print(Fore.LIGHTBLUE_EX + Const.logo + Fore.RESET)
-        print(Fore.LIGHTGREEN_EX + "Version " + Const.VERSION + Fore.RESET)
+    async def initialize(self):
+        print(Back.BLUE + Fore.RED + Style.BRIGHT + Const.logo)
+        print(Fore.LIGHTGREEN_EX + "Version " + self.__version__)
+        self.loop = asyncio.get_event_loop()
         self.pull_config()
         if self.debug:
             info = f"Debug: {self.debug}\n" \
@@ -82,16 +86,17 @@ class ArkHandler:
                    f"Autowipe: {self.autowipe}\n" \
                    f"Clusterwipe: {self.clustewipe}\n" \
                    f"WipeTimes: {self.wipetimes}"
-            print(Fore.CYAN + info + Fore.RESET)
+            print(Fore.CYAN + info)
         if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-            path = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets"))
-            log.debug(f"Running as EXE - {path}")
-            self.images = {
-                "start": fr"{path}\start.PNG",
-                "host": fr"{path}\host.PNG",
-                "run": fr"{path}\run.PNG",
-                "loaded": fr"{path}\loaded.PNG"
-            }
+            log.debug(f"Running as EXE - {self.root}")
+        tasks = [
+            self.watchdog_loop(),
+            self.event_loop(),
+            self.update_loop(),
+            self.wipe_loop()
+        ]
+        log.info("Starting task loops")
+        await asyncio.gather(*tasks)
 
     async def execute(self, partial_function: functools.partial):
         result = await self.loop.run_in_executor(self.threadpool, partial_function)
@@ -105,8 +110,17 @@ class ArkHandler:
         elif conf.stat().st_mtime == self.configmtime:
             return
         parser.read("config.ini")
+        prev = self.debug
         self.debug = parser.getboolean("Settings", "Debug")
-        if not self.debug:
+        if prev is not None:
+            if self.debug and not prev:
+                log.info("Debug has been changed to True")
+            elif prev and not self.debug:
+                log.info("Debug has been changed to False")
+        if self.debug:
+            console.setLevel(logging.DEBUG)
+            logfile.setLevel(logging.DEBUG)
+        else:
             console.setLevel(logging.INFO)
             logfile.setLevel(logging.INFO)
         self.hook = parser.get("Settings", "WebhookURL").strip(r'"')
@@ -153,7 +167,7 @@ class ArkHandler:
             await self.execute(functools.partial(start_ark, self.images))
             await send_webhook(self.hook, "Booting", "Loading server files...", 19357)
             await asyncio.sleep(10)
-            os.system("net stop LicenseManager")
+            call("net stop LicenseManager", stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
             while True:
                 loc = await self.execute(functools.partial(on_screen, self.images["loaded"]))
                 if loc is not None:
@@ -292,24 +306,10 @@ class ArkHandler:
             self.booting = False
 
 
-async def main():
-    ark = ArkHandler()
-    ark.initialize()
-    tasks = [
-        ark.watchdog_loop(),
-        ark.event_loop(),
-        ark.update_loop(),
-        ark.wipe_loop()
-    ]
-    log.info("Starting task loops")
-    await asyncio.gather(*tasks)
-
-
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        asyncio.run(ArkHandler().initialize())
     except KeyboardInterrupt:
         pass
     finally:
         set_resolution(default=True)
-

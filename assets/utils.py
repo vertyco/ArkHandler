@@ -19,7 +19,6 @@ log = logging.getLogger("arkhandler")
 
 
 class Const:
-    VERSION = "3.0.0"
     download = "**The server has started downloading an update, and will go down once it starts installing.**"
     install = "**The server has started installing the update. Stand by...**"
     complete = "**The server has finished installing the update.**"
@@ -37,20 +36,18 @@ class Const:
     config = fr"{save_path}\UWPConfig\UWP"
 
     logo = r"""
-                            _    _    _                 _ _           
-                 /\        | |  | |  | |               | | |          
-                /  \   _ __| | _| |__| | __ _ _ __   __| | | ___ _ __ 
-               / /\ \ | '__| |/ /  __  |/ _` | '_ \ / _` | |/ _ \ '__|
-              / ____ \| |  |   <| |  | | (_| | | | | (_| | |  __/ |   
-             /_/    \_\_|  |_|\_\_|  |_|\__,_|_| |_|\__,_|_|\___|_|   
-                                                                      
-                                                                      
-              ___       __   __       _               
-             | _ )_  _  \ \ / /__ _ _| |_ _  _ __ ___ 
-             | _ \ || |  \ V / -_) '_|  _| || / _/ _ \
-             |___/\_, |   \_/\___|_|  \__|\_, \__\___/
-                  |__/                    |__/        
-          """
+                _    _    _                 _ _           
+     /\        | |  | |  | |               | | |          
+    /  \   _ __| | _| |__| | __ _ _ __   __| | | ___ _ __ 
+   / /\ \ | '__| |/ /  __  |/ _` | '_ \ / _` | |/ _ \ '__|
+  / ____ \| |  |   <| |  | | (_| | | | | (_| | |  __/ |   
+ /_/    \_\_|  |_|\_\_|  |_|\__,_|_| |_|\__,_|_|\___|_|                                                                                                                     
+  ___       __   __       _               
+ | _ )_  _  \ \ / /__ _ _| |_ _  _ __ ___ 
+ | _ \ || |  \ V / -_) '_|  _| || / _/ _ \
+ |___/\_, |   \_/\___|_|  \__|\_, \__\___/
+      |__/                    |__/        
+"""
 
     default_config = """
     # OPTIONS
@@ -96,8 +93,8 @@ def get_windows(name: str):
     return windows
 
 
-def on_screen(path: str):
-    return pyautogui.locateOnScreen(path, confidence=0.9)
+def on_screen(path: str, confidence: float = 0.8):
+    return pyautogui.locateOnScreen(path, confidence=confidence)
 
 
 def click_button(button: str, images: dict):
