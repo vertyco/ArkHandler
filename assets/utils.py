@@ -53,15 +53,14 @@ class Const:
           """
 
     default_config = """
-    # Create a webhook URL for the discord channel this rig hosts and paste it in the quotes to have the bot send update alerts.
-    # The webhook messages can also be configured below.
-    
-    # The Path settings is the folder path to your backup ini files if you have them (gameusersettings.ini and game.ini).
-    # When ArkHandler reboots the server,
-    # it will pull the newest ini files from those paths and inject them into your appdata settings.
-    
-    # Wipe times should always be "mm/dd HH:MM" separated by a comma with NO spaces
-    # Example: 04/10 12:30,08/20 17:00
+    # OPTIONS
+    # WebhookURL: Discord webhook url goes here, you can google how to generate it
+    # GameiniPaht: The path to your backup Game.ini file if you have one
+    # GameUserSettingsiniPath: The path you your backup GameUserSettings.ini file
+    # AutoWipe: Toggle auto wipe on or off
+    # AlsoWipeClusterData: Self explanatory, when a server wipes, toggle to include cluster data
+    # WipeTimes: List of times separated by commas in the format "mm/dd HH:MM"
+    # Example: 04/10 12:30,08/20 17:00, 01/19 7:45
     # Debug field, if True, shows extra data in the console(for debug purposes)
     
     # IF USING THIS EXAMPLE FILE, RENAME IT TO "config.ini"
@@ -156,6 +155,7 @@ def set_resolution(width: int = 1280, height: int = 720, default: bool = False):
         return
     if pyautogui.size().width == width or pyautogui.size().height == height:
         return
+    log.warning(f"Setting resolution to {width} by {height}")
     dev = pywintypes.DEVMODEType()
     dev.PelsWidth = width
     dev.PelsHeight = height

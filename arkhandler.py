@@ -41,7 +41,7 @@ log.addHandler(logfile)
 class ArkHandler:
     def __init__(self):
         # Handlers
-        self.loop = asyncio.new_event_loop()
+        self.loop = asyncio.get_event_loop()
         self.threadpool = ThreadPoolExecutor(max_workers=5, thread_name_prefix="arkhandler")
 
         # Config
@@ -70,15 +70,10 @@ class ArkHandler:
         self.booting = False  # Is booting up
         self.last_update = None  # Time of last event update
 
-    def start(self):
-        set_resolution()
+    def initialize(self):
         print(Fore.LIGHTBLUE_EX + Const.logo + Fore.RESET)
         print(Fore.LIGHTGREEN_EX + "Version " + Const.VERSION + Fore.RESET)
         self.pull_config()
-        self.loop.create_task(self.watchdog_loop())
-        self.loop.create_task(self.event_loop())
-        self.loop.create_task(self.update_loop())
-        self.loop.create_task(self.wipe_loop())
         if self.debug:
             info = f"Debug: {self.debug}\n" \
                    f"Webhook: {self.hook}\n" \
@@ -87,7 +82,7 @@ class ArkHandler:
                    f"Autowipe: {self.autowipe}\n" \
                    f"Clusterwipe: {self.clustewipe}\n" \
                    f"WipeTimes: {self.wipetimes}"
-            print(Fore.MAGENTA + info + Fore.RESET)
+            print(Fore.CYAN + info + Fore.RESET)
         if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
             path = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets"))
             log.debug(f"Running as EXE - {path}")
@@ -97,8 +92,7 @@ class ArkHandler:
                 "run": fr"{path}\run.PNG",
                 "loaded": fr"{path}\loaded.PNG"
             }
-        log.info("Starting task loops")
-        self.loop.run_forever()
+        set_resolution()
 
     async def execute(self, partial_function: functools.partial):
         result = await self.loop.run_in_executor(self.threadpool, partial_function)
@@ -110,9 +104,9 @@ class ArkHandler:
         if not conf.exists():
             log.warning("No config detected! Creating new one")
             conf.write_text(Const.default_config)
-        if conf.stat().st_mtime == self.configmtime:
+        elif conf.stat().st_mtime == self.configmtime:
             return
-        parser.read(conf)
+        parser.read("config.ini")
         self.debug = parser.getboolean("Settings", "Debug")
         if not self.debug:
             console.setLevel(logging.INFO)
@@ -123,9 +117,13 @@ class ArkHandler:
         self.autowipe = parser.getboolean("Settings", "AutoWipe")
         self.clustewipe = parser.getboolean("Settings", "AlsoWipeClusterData")
 
-        wipetimes_raw = [i.strip() for i in parser.get("Settings", "WipeTimes").strip(r'"').split(",") if i.strip()]
-        if wipetimes_raw:
-            self.wipetimes = [datetime.strptime(i, "%m/%d %H:%M") for i in wipetimes_raw]
+        try:
+            wipetimes_raw = [i.strip() for i in parser.get("Settings", "WipeTimes").strip(r'"').split(",") if i.strip()]
+            if wipetimes_raw:
+                self.wipetimes = [datetime.strptime(i, "%m/%d %H:%M") for i in wipetimes_raw]
+        except Exception as e:
+            log.error(f"Failed to set wipe times, invalid format!\n{e}")
+
         self.configmtime = conf.stat().st_mtime
 
     async def watchdog_loop(self):
@@ -145,7 +143,7 @@ class ArkHandler:
 
         # If ark is not running
         if self.running:
-            log.info("Ark is no longer running")
+            log.warning("Ark is no longer running")
             self.running = False
         if any([self.updating, self.checking_updates, self.booting]):
             return
@@ -296,8 +294,24 @@ class ArkHandler:
             self.booting = False
 
 
+async def main():
+    ark = ArkHandler()
+    ark.initialize()
+    tasks = [
+        ark.watchdog_loop(),
+        ark.event_loop(),
+        ark.update_loop(),
+        ark.wipe_loop()
+    ]
+    log.info("Starting task loops")
+    await asyncio.gather(*tasks)
+
+
 if __name__ == "__main__":
     try:
-        ArkHandler().start()
+        asyncio.run(main())
     except KeyboardInterrupt:
         pass
+    finally:
+        set_resolution(default=True)
+

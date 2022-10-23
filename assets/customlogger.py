@@ -6,8 +6,8 @@ from colorama import Fore
 class CustomFormatter(logging.Formatter):
     debug = Fore.LIGHTGREEN_EX
     info = Fore.LIGHTWHITE_EX
-    warning = Fore.LIGHTMAGENTA_EX
-    error = Fore.LIGHTYELLOW_EX
+    warning = Fore.LIGHTYELLOW_EX
+    error = Fore.LIGHTMAGENTA_EX
     crit = Fore.LIGHTRED_EX
     reset = Fore.RESET
     format = "%(asctime)s - %(levelname)s - %(message)s"
