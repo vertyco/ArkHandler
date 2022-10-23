@@ -92,14 +92,12 @@ class ArkHandler:
                 "run": fr"{path}\run.PNG",
                 "loaded": fr"{path}\loaded.PNG"
             }
-        set_resolution()
 
     async def execute(self, partial_function: functools.partial):
         result = await self.loop.run_in_executor(self.threadpool, partial_function)
         return result
 
     def pull_config(self):
-        log.debug("Reading config")
         conf = Path("config.ini")
         if not conf.exists():
             log.warning("No config detected! Creating new one")
@@ -123,7 +121,7 @@ class ArkHandler:
                 self.wipetimes = [datetime.strptime(i, "%m/%d %H:%M") for i in wipetimes_raw]
         except Exception as e:
             log.error(f"Failed to set wipe times, invalid format!\n{e}")
-
+        log.debug("Config parsed")
         self.configmtime = conf.stat().st_mtime
 
     async def watchdog_loop(self):

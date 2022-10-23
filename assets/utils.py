@@ -153,7 +153,9 @@ def set_resolution(width: int = 1280, height: int = 720, default: bool = False):
     if default:
         win32api.ChangeDisplaySettings(None, 0)
         return
-    if pyautogui.size().width == width or pyautogui.size().height == height:
+    if abs(pyautogui.size().width - width) < 10:
+        return
+    if abs(pyautogui.size().height - height) < 10:
         return
     log.warning(f"Setting resolution to {width} by {height}")
     dev = pywintypes.DEVMODEType()
