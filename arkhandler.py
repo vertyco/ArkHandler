@@ -15,7 +15,7 @@ from assets.customlogger import CustomFormatter, StandardFormatter
 from assets.utils import (
     Const, set_resolution,
     send_webhook, kill, is_running, update_ready, is_updating,
-    check_updates, sync_inis, start_ark, wipe_server
+    check_updates, sync_inis, start_ark, wipe_server, on_screen
 )
 
 # Window setup
@@ -63,13 +63,13 @@ class ArkHandler:
 
     def start(self):
         set_resolution()
+        print(Fore.LIGHTBLUE_EX + Const.logo + Fore.RESET)
+        print(Fore.LIGHTGREEN_EX + "Version " + Const.VERSION + Fore.RESET)
         self.pull_config()
         self.loop.create_task(self.watchdog_loop())
         self.loop.create_task(self.event_loop())
         self.loop.create_task(self.update_loop())
         self.loop.create_task(self.wipe_loop())
-        print(Fore.LIGHTBLUE_EX + Const.logo + Fore.RESET)
-        print(Fore.LIGHTGREEN_EX + "Version " + Const.VERSION + Fore.RESET)
         if self.debug:
             info = f"Debug: {self.debug}\n" \
                    f"Webhook: {self.hook}\n" \
@@ -79,6 +79,7 @@ class ArkHandler:
                    f"Clusterwipe: {self.clustewipe}\n" \
                    f"WipeTimes: {self.wipetimes}"
             print(Fore.MAGENTA + info + Fore.RESET)
+        log.info("Starting task loops")
         self.loop.run_forever()
 
     async def execute(self, partial_function: functools.partial):
@@ -86,10 +87,11 @@ class ArkHandler:
         return result
 
     def pull_config(self):
-        log.debug("Pulling config")
+        log.debug("Reading config")
         conf = Path("config.ini")
         if not conf.exists():
-            raise FileNotFoundError(conf)
+            log.warning("No config detected! Creating new one")
+            conf.write_text(Const.default_config)
         if conf.stat().st_mtime == self.configmtime:
             return
         parser.read(conf)
@@ -106,15 +108,15 @@ class ArkHandler:
         wipetimes_raw = [i.strip() for i in parser.get("Settings", "WipeTimes").strip(r'"').split(",") if i.strip()]
         if wipetimes_raw:
             self.wipetimes = [datetime.strptime(i, "%m/%d %H:%M") for i in wipetimes_raw]
-
         self.configmtime = conf.stat().st_mtime
 
     async def watchdog_loop(self):
         """Check every 30 seconds if Ark is running and start it if not"""
         while True:
-            await asyncio.sleep(30)
+            await asyncio.sleep(10)
             log.debug("Checking if Ark is running")
             await self.watchdog()
+            await asyncio.sleep(20)
 
     async def watchdog(self):
         if is_running():
@@ -138,7 +140,11 @@ class ArkHandler:
             await send_webhook(self.hook, "Booting", "Loading server files...", 19357)
             await asyncio.sleep(10)
             os.system("net stop LicenseManager")
-            await asyncio.sleep(60)
+            while True:
+                loc = await self.execute(functools.partial(on_screen, Const.images["loaded"]))
+                if loc is not None:
+                    break
+            log.info("Reboot complete")
             await send_webhook(self.hook, "Reboot Complete", "Server should be back online.", 65314)
         except Exception as e:
             log.critical(f"Critical error in ArkHandler!: {traceback.format_exc()}")

@@ -16,33 +16,28 @@ import win32gui
 from pywinauto.application import Application
 
 log = logging.getLogger("arkhandler")
-positions = {
-    "start": (0.5, 0.875),  #
-    "host": (0.12, 0.545),  #
-    "run": (0.494, 0.7675),  #
-    "accept1": (0.418, 0.551),  #
-    "accept2": (0.568, 0.6905)  #
-}
-images = {
-    "start": fr"{os.getcwd()}\assets\start.PNG",
-    "host": fr"{os.getcwd()}\assets\host.PNG",
-    "run": fr"{os.getcwd()}\assets\run.PNG"
-}
-winmap = {
-    "minimize": win32con.SW_MINIMIZE,
-    "maximize": win32con.SW_MAXIMIZE,
-    "normal": win32con.SW_NORMAL,
-    "restore": win32con.SW_RESTORE
-}
 
 
 class Const:
     VERSION = "3.0.0"
-
     download = "**The server has started downloading an update, and will go down once it starts installing.**"
     install = "**The server has started installing the update. Stand by...**"
     complete = "**The server has finished installing the update.**"
-
+    # Coords
+    positions = {
+        "start": (0.5, 0.875),
+        "host": (0.12, 0.545),
+        "run": (0.494, 0.7675),
+        "accept1": (0.418, 0.551),
+        "accept2": (0.568, 0.6905)
+    }
+    # Images
+    images = {
+        "start": fr"{os.getcwd()}\assets\start.PNG",
+        "host": fr"{os.getcwd()}\assets\host.PNG",
+        "run": fr"{os.getcwd()}\assets\run.PNG",
+        "loaded": fr"{os.getcwd()}\assets\loaded.PNG"
+    }
     # Ark paths
     save_path = fr"{os.environ['LOCALAPPDATA']}\Packages\StudioWildcard.4558480580BB9_1w2mm55455e38\LocalState\Saved"
     boot = r"explorer.exe shell:appsFolder\StudioWildcard.4558480580BB9_1w2mm55455e38!AppARKSurvivalEvolved"
@@ -63,6 +58,30 @@ class Const:
              |___/\_, |   \_/\___|_|  \__|\_, \__\___/
                   |__/                    |__/        
           """
+
+    default_config = """
+    # Create a webhook URL for the discord channel this rig hosts and paste it in the quotes to have the bot send update alerts.
+    # The webhook messages can also be configured below.
+    
+    # The Path settings is the folder path to your backup ini files if you have them (gameusersettings.ini and game.ini).
+    # When ArkHandler reboots the server,
+    # it will pull the newest ini files from those paths and inject them into your appdata settings.
+    
+    # Wipe times should always be "mm/dd HH:MM" separated by a comma with NO spaces
+    # Example: 04/10 12:30,08/20 17:00
+    # Debug field, if True, shows extra data in the console(for debug purposes)
+    
+    # IF USING THIS EXAMPLE FILE, RENAME IT TO "config.ini"
+    
+    [Settings]
+    WebhookURL = ""
+    GameiniPath = ""
+    GameUserSettingsiniPath = ""
+    AutoWipe = False
+    AlsoWipeClusterData = False
+    WipeTimes =
+    Debug = False
+    """
 
 
 def get_windows(name: str):
@@ -85,18 +104,21 @@ def get_windows(name: str):
     return windows
 
 
+def on_screen(path: str):
+    return pyautogui.locateOnScreen(path, confidence=0.9)
+
+
 def click_button(button: str):
     """Click an ark button"""
-    if button in images:
+    if button in Const.images:
         while True:
-            path = images[button]
-            loc = pyautogui.locateOnScreen(path, confidence=0.9)
+            loc = on_screen(Const.images[button])
             if loc is not None:
                 break
     else:
         sleep(0.5)
     # Ark will always be 16:9 aspect ratio
-    xr, yr = positions[button]
+    xr, yr = Const.positions[button]
     ark_windows = get_windows("ark: survival evolved")
     if not ark_windows:
         raise Exception("Ark is not running!")
