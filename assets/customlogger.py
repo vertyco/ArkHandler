@@ -1,9 +1,10 @@
 import logging
+
 from colorama import Fore
 
 
 class CustomFormatter(logging.Formatter):
-    debug = Fore.WHITE
+    debug = Fore.LIGHTGREEN_EX
     info = Fore.LIGHTWHITE_EX
     warning = Fore.LIGHTMAGENTA_EX
     error = Fore.LIGHTYELLOW_EX
@@ -45,11 +46,6 @@ def main():
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(CustomFormatter())
     logger.addHandler(ch)
-
-    # ch2 = logging.FileHandler("testlog.log")
-    # ch2.setLevel(logging.DEBUG)
-    # ch2.setFormatter(StandardFormatter())
-    # logger.addHandler(ch2)
 
     logger.debug("debug message")
     logger.info("info message")
