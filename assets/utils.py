@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import shutil
+from configparser import ConfigParser
 from pathlib import Path
 from time import sleep
 
@@ -14,6 +15,7 @@ import win32api
 import win32con
 import win32gui
 from pywinauto.application import Application
+from rcon.source import rcon
 
 log = logging.getLogger("arkhandler")
 
@@ -51,6 +53,8 @@ class Const:
 
     default_config = """
     # OPTIONS
+    # NetDownKill: How long(in minutes) internet is down before killing the servers and pausing ArkHandler
+    #  - set to 0 to disable
     # WebhookURL: Discord webhook url goes here, you can google how to generate it
     # GameiniPaht: The path to your backup Game.ini file if you have one
     # GameUserSettingsiniPath: The path you your backup GameUserSettings.ini file
@@ -60,9 +64,9 @@ class Const:
     # Example: 04/10 12:30,08/20 17:00, 01/19 7:45
     # Debug field, if True, shows extra data in the console(for debug purposes)
     
-    # IF USING THIS EXAMPLE FILE, RENAME IT TO "config.ini"
     
     [Settings]
+    NetDownKill = 3
     WebhookURL = ""
     GameiniPath = ""
     GameUserSettingsiniPath = ""
@@ -104,8 +108,7 @@ def click_button(button: str, images: dict):
             loc = on_screen(images[button])
             if loc is not None:
                 break
-    else:
-        sleep(0.5)
+    sleep(1)
     # Ark will always be 16:9 aspect ratio
     xr, yr = Const.positions[button]
     ark_windows = get_windows("ark: survival evolved")
@@ -365,3 +368,22 @@ def wipe_server(include_cluster: bool = False):
     for i in to_del:
         os.remove(i)
     log.info(f"Deleted {len(to_del)} files")
+
+
+def get_rcon_info():
+    path = os.path.join(Const.config, "GameUserSettings.ini")
+    parser = ConfigParser(strict=False)
+    parser.read(path)
+    port = parser.get("ServerSettings", "RCONPort", fallback=0)
+    passwd = parser.get("ServerSettings", "ServerAdminPassword", fallback=None)
+    return port, passwd
+
+
+async def run_rcon(command: str, port: int, passwd: str):
+    res = await rcon(
+        command=command,
+        host="localhost",
+        port=int(port),
+        passwd=passwd
+    )
+    return res

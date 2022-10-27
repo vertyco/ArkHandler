@@ -5,6 +5,7 @@
 Crossplay Server Management Script
 
 This is a little script I wrote to handle my ark servers
+
 - Auto-reboots on crash via screen mapping
 - Syncs ini files from a backup or main location before it boots
 - Checks for updates automatically and installs them
