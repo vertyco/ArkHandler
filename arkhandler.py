@@ -1,13 +1,13 @@
 import asyncio
 import functools
 import logging
-from logging import handlers
 import os
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from configparser import ConfigParser
 from datetime import datetime
+from logging import handlers
 from pathlib import Path
 from subprocess import call, DEVNULL
 
@@ -23,8 +23,6 @@ from assets.utils import (
     get_rcon_info, run_rcon
 )
 
-# Window setup
-os.system('title ArkHandler')
 # Config setup
 parser = ConfigParser()
 # Log setup
@@ -43,9 +41,12 @@ log.addHandler(logfile)
 
 class ArkHandler:
     """Compile with 'pyinstaller.exe --clean main.spec'"""
-    __version__ = "3.0.0"
+    __version__ = "3.1.1"
 
     def __init__(self):
+        # Window setup
+        os.system(f"title ArkHandler {self.__version__}")
+
         # Handlers
         self.loop = None
         self.threadpool = ThreadPoolExecutor(max_workers=5, thread_name_prefix="arkhandler")
@@ -86,7 +87,6 @@ class ArkHandler:
 
     async def initialize(self):
         print(Fore.CYAN + Style.BRIGHT + Const.logo)
-        print(Fore.LIGHTGREEN_EX + "Version " + self.__version__)
         self.loop = asyncio.get_event_loop()
         self.pull_config()
         log.debug(f"Python version {sys.version}")
@@ -164,7 +164,8 @@ class ArkHandler:
             try:
                 await self.watchdog()
             except Exception:
-                log.error(f"Watchdog loop failed\n{traceback.format_exc()}")
+                log.warning("Watchdog loop failed!")
+                log.error(traceback.format_exc())
             await asyncio.sleep(20)
 
     async def watchdog(self):
@@ -211,7 +212,8 @@ class ArkHandler:
             try:
                 await self.events()
             except Exception:
-                log.error(f"Event loop failed\n{traceback.format_exc()}")
+                log.warning(f"Event loop failed!")
+                log.error(traceback.format_exc())
 
     async def events(self):
         server = "localhost"
@@ -288,12 +290,15 @@ class ArkHandler:
             try:
                 await self.updates()
             except Exception:
-                log.error(f"Update loop failed\n{traceback.format_exc()}")
+                log.warning(f"Update loop failed!")
+                log.error(traceback.format_exc())
             finally:
                 self.checking_updates = False
 
     async def updates(self):
         app = await self.execute(functools.partial(check_updates))
+        if not app:
+            return
         ready = await self.execute(functools.partial(update_ready, app, "ark"))
         await asyncio.sleep(30)
         updating = await self.execute(functools.partial(is_updating, app, "ark"))
@@ -307,7 +312,8 @@ class ArkHandler:
             try:
                 await self.wipe()
             except Exception:
-                log.error(f"WIpe loop failed\n{traceback.format_exc()}")
+                log.warning(f"WIpe loop failed!")
+                log.error(traceback.format_exc())
 
     async def wipe(self):
         self.pull_config()
@@ -347,17 +353,18 @@ class ArkHandler:
             try:
                 await self.internet()
             except Exception:
-                log.error(f"internet loop failed\n{traceback.format_exc()}")
+                log.warning(f"internet loop failed!")
+                log.error(traceback.format_exc())
 
     async def internet(self):
         now = datetime.now()
         failed = False
         try:
-            async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with ClientSession(timeout=ClientTimeout(total=30)) as session:
                 async with session.get("http://www.google.com") as res:
                     if res.status < 200 or res.status > 204:
                         failed = True
-        except ClientConnectionError:
+        except (ClientConnectionError, TimeoutError):
             failed = True
 
         if failed:

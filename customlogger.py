@@ -1,6 +1,6 @@
 import logging
 
-from colorama import Fore
+from colorama import Fore, Back, Style
 
 
 class CustomFormatter(logging.Formatter):
@@ -12,11 +12,11 @@ class CustomFormatter(logging.Formatter):
     reset = Fore.RESET
     format = "%(asctime)s - %(levelname)s - %(message)s"
     FORMATS = {
-        logging.DEBUG: debug + format + reset,
-        logging.INFO: info + format + reset,
-        logging.WARNING: warning + format + reset,
-        logging.ERROR: error + format + reset,
-        logging.CRITICAL: crit + format + reset
+        logging.DEBUG: Fore.WHITE + format + reset,
+        logging.INFO: Fore.LIGHTWHITE_EX + format + reset,
+        logging.WARNING: Fore.LIGHTMAGENTA_EX + format + reset,
+        logging.ERROR: Fore.LIGHTYELLOW_EX + format + reset,
+        logging.CRITICAL: Fore.LIGHTRED_EX + format + reset
     }
 
     def format(self, record):
@@ -31,7 +31,7 @@ class CustomFormatter(logging.Formatter):
 class StandardFormatter(logging.Formatter):
     def format(self, record):
         formatter = logging.Formatter(
-            fmt="%(asctime)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)",
+            fmt="%(asctime)s - %(levelname)s - %(message)s",
             datefmt='%m/%d %I:%M:%S %p'
         )
         return formatter.format(record)
@@ -46,11 +46,6 @@ def main():
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(CustomFormatter())
     logger.addHandler(ch)
-
-    # ch2 = logging.FileHandler("testlog.log")
-    # ch2.setLevel(logging.DEBUG)
-    # ch2.setFormatter(StandardFormatter())
-    # logger.addHandler(ch2)
 
     logger.debug("debug message")
     logger.info("info message")

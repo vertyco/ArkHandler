@@ -1,7 +1,9 @@
+import contextlib
 import json
 import logging
 import os
 import shutil
+import traceback
 from configparser import ConfigParser
 from pathlib import Path
 from time import sleep
@@ -9,12 +11,13 @@ from time import sleep
 import aiohttp
 import psutil
 import pyautogui
-import pywinauto.findwindows
 import pywintypes
 import win32api
 import win32con
 import win32gui
 from pywinauto.application import Application
+from pywinauto.findwindows import ElementNotFoundError, ElementAmbiguousError
+from pywinauto.timings import TimeoutError
 from rcon.source import rcon
 
 log = logging.getLogger("arkhandler")
@@ -239,36 +242,40 @@ def is_updating(prog: Application, name: str):
 
 def check_updates():
     """Check MS store for updates"""
-    if not is_running("WinStore.App.exe"):
-        os.system("explorer.exe shell:appsFolder\Microsoft.WindowsStore_8wekyb3d8bbwe!App")
-    app = Application(backend="uia")
-    while True:
-        try:
-            app = app.connect(title="Microsoft Store")
-            break
-        except pywinauto.findwindows.ElementNotFoundError:
-            continue
-
-    windows = get_windows("Microsoft Store")
-    if len(windows) > 1 and windows[0][2][1] == 1:
-        for i in windows:
-            win32gui.ShowWindow(i[0], win32con.SW_RESTORE)
-
-    dlg = app.top_window()
-    # Library button
     try:
-        library_button = dlg.window(title="Library")
+        if not is_running("WinStore.App.exe"):
+            os.system("explorer.exe shell:appsFolder\Microsoft.WindowsStore_8wekyb3d8bbwe!App")
+        app = Application(backend="uia")
+        while True:
+            try:
+                app = app.connect(title="Microsoft Store")
+                break
+            except ElementNotFoundError:
+                sleep(1)
+                continue
 
-        library_button.wait("ready", timeout=120, retry_interval=1)
-        library_button.click_input()
-    except pywinauto.findwindows.ElementAmbiguousError:
-        pass
-    # Update button
-    update_button = dlg.window(auto_id="CheckForUpdatesButton")
-    update_button.wait("ready")
-    update_button.click()
-    dlg.window(control_type="Button", auto_id="Minimize").click()
-    return app
+        windows = get_windows("Microsoft Store")
+        if len(windows) > 1 and windows[0][2][1] == 1:
+            for i in windows:
+                win32gui.ShowWindow(i[0], win32con.SW_RESTORE)
+
+        dlg = app.top_window()
+        # Library button
+        with contextlib.suppress(ElementAmbiguousError, TimeoutError):
+            library_button = dlg.window(auto_id="MyLibraryButton")
+            library_button.wait("ready", timeout=30)
+            library_button.click_input()
+
+        # Update button
+        with contextlib.suppress(ElementAmbiguousError, TimeoutError):
+            update_button = dlg.window(auto_id="CheckForUpdatesButton")
+            update_button.wait("ready", timeout=60)
+            update_button.click()
+
+        dlg.window(control_type="Button", auto_id="Minimize").click()
+        return app
+    except Exception:
+        log.error(traceback.format_exc())
 
 
 def sync_inis(game: str, gameuser: str):
@@ -387,3 +394,7 @@ async def run_rcon(command: str, port: int, passwd: str):
         passwd=passwd
     )
     return res
+
+
+if __name__ == "__main__":
+    check_updates()
