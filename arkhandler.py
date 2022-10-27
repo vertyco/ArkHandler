@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import logging
+from logging import handlers
 import os
 import sys
 import traceback
@@ -33,7 +34,7 @@ log.setLevel(logging.DEBUG)
 console = logging.StreamHandler()
 console.setFormatter(CustomFormatter())
 # File logs
-logfile = logging.FileHandler('logs.log')
+logfile = handlers.RotatingFileHandler("logs.log", mode="a", maxBytes=5 * 1024 * 1024, backupCount=10)
 logfile.setFormatter(StandardFormatter())
 # Add handlers
 log.addHandler(console)
@@ -41,6 +42,7 @@ log.addHandler(logfile)
 
 
 class ArkHandler:
+    """Compile with 'pyinstaller.exe --clean main.spec'"""
     __version__ = "3.0.0"
 
     def __init__(self):
@@ -386,5 +388,6 @@ if __name__ == "__main__":
     except Exception:
         log.critical(f"Arkhandler failed to start!!!\n{traceback.format_exc()}")
     finally:
-        set_resolution(default=True)
         log.info("Arkhandler shutting down...")
+        set_resolution(default=True)
+        log.info("You may now close this window")
