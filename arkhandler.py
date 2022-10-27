@@ -15,7 +15,7 @@ import win32evtlog
 from aiohttp import ClientSession, ClientTimeout, ClientConnectionError
 from colorama import Fore, Style
 
-from assets.utils import (
+from utils import (
     Const, set_resolution, PrettyFormatter, StandardFormatter,
     send_webhook, kill, is_running, update_ready, is_updating,
     check_updates, sync_inis, start_ark, wipe_server, on_screen,
@@ -40,7 +40,7 @@ log.addHandler(logfile)
 
 class ArkHandler:
     """Compile with 'pyinstaller.exe --clean main.spec'"""
-    __version__ = "3.1.1"
+    __version__ = "3.1.2"
 
     def __init__(self):
         # Window setup
