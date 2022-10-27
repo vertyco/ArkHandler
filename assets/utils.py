@@ -19,8 +19,39 @@ from pywinauto.application import Application
 from pywinauto.findwindows import ElementNotFoundError, ElementAmbiguousError
 from pywinauto.timings import TimeoutError
 from rcon.source import rcon
+from colorama import Fore, Back, Style
+import colorama
 
 log = logging.getLogger("arkhandler")
+
+
+class PrettyFormatter(logging.Formatter):
+    colorama.init(autoreset=True)
+    fmt = "%(asctime)s - %(levelname)s - %(message)s"
+    formats = {
+        logging.DEBUG: Fore.LIGHTGREEN_EX + Style.BRIGHT + fmt,
+        logging.INFO: Fore.LIGHTWHITE_EX + Style.BRIGHT + fmt,
+        logging.WARNING: Fore.LIGHTYELLOW_EX + Style.BRIGHT + fmt,
+        logging.ERROR: Fore.LIGHTMAGENTA_EX + Style.BRIGHT + fmt,
+        logging.CRITICAL: Fore.RED + Back.LIGHTYELLOW_EX + Style.BRIGHT + fmt
+    }
+
+    def format(self, record):
+        log_fmt = self.formats.get(record.levelno)
+        formatter = logging.Formatter(
+            fmt=log_fmt,
+            datefmt='%m/%d %I:%M:%S %p'
+        )
+        return formatter.format(record)
+
+
+class StandardFormatter(logging.Formatter):
+    def format(self, record):
+        formatter = logging.Formatter(
+            fmt="%(asctime)s - %(levelname)s - %(message)s",
+            datefmt='%m/%d %I:%M:%S %p'
+        )
+        return formatter.format(record)
 
 
 class Const:

@@ -15,9 +15,8 @@ import win32evtlog
 from aiohttp import ClientSession, ClientTimeout, ClientConnectionError
 from colorama import Fore, Style
 
-from assets.customlogger import CustomFormatter, StandardFormatter
 from assets.utils import (
-    Const, set_resolution,
+    Const, set_resolution, PrettyFormatter, StandardFormatter,
     send_webhook, kill, is_running, update_ready, is_updating,
     check_updates, sync_inis, start_ark, wipe_server, on_screen,
     get_rcon_info, run_rcon
@@ -30,7 +29,7 @@ log = logging.getLogger("arkhandler")
 log.setLevel(logging.DEBUG)
 # Console logs
 console = logging.StreamHandler()
-console.setFormatter(CustomFormatter())
+console.setFormatter(PrettyFormatter())
 # File logs
 logfile = handlers.RotatingFileHandler("logs.log", mode="a", maxBytes=5 * 1024 * 1024, backupCount=10)
 logfile.setFormatter(StandardFormatter())
