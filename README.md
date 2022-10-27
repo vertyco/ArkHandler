@@ -1,7 +1,7 @@
 ![Platform](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Python 3.11](https://img.shields.io/badge/python-v3.11-blue?style=for-the-badge)
 
-![Lines of code](https://img.shields.io/tokei/lines/github/vertyco/ArkHandler?style=plastic)
+
 ![Repo-Size](https://img.shields.io/github/repo-size/vertyco/vrt-cogs)
 
 # ArkHandler
