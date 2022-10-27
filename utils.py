@@ -9,18 +9,18 @@ from pathlib import Path
 from time import sleep
 
 import aiohttp
+import colorama
 import psutil
 import pyautogui
 import pywintypes
 import win32api
 import win32con
 import win32gui
+from colorama import Fore, Back, Style
 from pywinauto.application import Application
 from pywinauto.findwindows import ElementNotFoundError, ElementAmbiguousError
 from pywinauto.timings import TimeoutError
 from rcon.source import rcon
-from colorama import Fore, Back, Style
-import colorama
 
 log = logging.getLogger("arkhandler")
 
