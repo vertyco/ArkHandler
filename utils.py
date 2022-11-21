@@ -31,9 +31,9 @@ class PrettyFormatter(logging.Formatter):
     formats = {
         logging.DEBUG: Fore.LIGHTGREEN_EX + Style.BRIGHT + fmt,
         logging.INFO: Fore.LIGHTWHITE_EX + Style.BRIGHT + fmt,
-        logging.WARNING: Fore.LIGHTYELLOW_EX + Style.BRIGHT + fmt,
+        logging.WARNING: Fore.YELLOW + Style.BRIGHT + fmt,
         logging.ERROR: Fore.LIGHTMAGENTA_EX + Style.BRIGHT + fmt,
-        logging.CRITICAL: Fore.RED + Back.LIGHTYELLOW_EX + Style.BRIGHT + fmt
+        logging.CRITICAL: Fore.LIGHTYELLOW_EX + Back.RED + Style.BRIGHT + fmt
     }
 
     def format(self, record):
@@ -99,7 +99,7 @@ class Const:
     # Debug field, if True, shows extra data in the console(for debug purposes)
     
     
-    [Settings]
+    [UserSettings]
     NetDownKill = 3
     WebhookURL = ""
     GameiniPath = ""
@@ -131,7 +131,7 @@ def get_windows(name: str):
     return windows
 
 
-def on_screen(path: str, confidence: float = 0.8):
+def on_screen(path: str, confidence: float = 0.85):
     return pyautogui.locateOnScreen(path, confidence=confidence)
 
 
@@ -142,7 +142,7 @@ def click_button(button: str, images: dict):
             loc = on_screen(images[button])
             if loc is not None:
                 break
-    sleep(1)
+    sleep(1.5)
     # Ark will always be 16:9 aspect ratio
     xr, yr = Const.positions[button]
     ark_windows = get_windows("ark: survival evolved")
@@ -247,7 +247,10 @@ def is_running(process: str = "ShooterGame.exe"):
 
 def update_ready(prog: Application, name: str):
     """Check if an app has an update (MS Store must be open)"""
-    window = prog.top_window()
+    try:
+        window = prog.top_window()
+    except RuntimeError:
+        return False
     for i in window.descendants(control_type="Button"):
         if name.lower() in str(i).lower() and "update available" in str(i).lower():
             return True
@@ -257,7 +260,10 @@ def update_ready(prog: Application, name: str):
 
 def is_updating(prog: Application, name: str):
     """Check if an app is updating (MS Store must be open)"""
-    window = prog.top_window()
+    try:
+        window = prog.top_window()
+    except RuntimeError:
+        return False
     for i in window.descendants(control_type="Button"):
         conditions = [
             name.lower() in str(i).lower(),
@@ -292,18 +298,28 @@ def check_updates():
 
         dlg = app.top_window()
         # Library button
-        with contextlib.suppress(ElementAmbiguousError, TimeoutError):
+        with contextlib.suppress(ElementAmbiguousError, ElementNotFoundError):
             library_button = dlg.window(auto_id="MyLibraryButton")
-            library_button.wait("ready", timeout=30)
+            with contextlib.suppress(TimeoutError):
+                library_button.wait("ready", timeout=30)
             library_button.click_input()
 
         # Update button
-        with contextlib.suppress(ElementAmbiguousError, TimeoutError):
+        error = False
+        try:
             update_button = dlg.window(auto_id="CheckForUpdatesButton")
-            update_button.wait("ready", timeout=60)
+            with contextlib.suppress(TimeoutError):
+                update_button.wait("ready", timeout=60)
             update_button.click()
+        except (ElementAmbiguousError, ElementNotFoundError):
+            error = True
 
-        dlg.window(control_type="Button", auto_id="Minimize").click()
+        # Minimize or close the window
+        if error:
+            kill("WinStore.App.exe")
+            return
+        for i in windows:
+            win32gui.ShowWindow(i[0], win32con.SW_MINIMIZE)
         return app
     except Exception:
         log.error(traceback.format_exc())
@@ -315,7 +331,9 @@ def sync_inis(game: str, gameuser: str):
         return
     # Game.ini
     source = Path(game)  # File to sync
-    if source.exists() and game:
+    if source.is_dir():
+        source = Path(os.path.join(game, "Game.ini"))
+    if source.exists() and source.is_file() and game:
         target = Path(fr"{Const.config}\Game.ini")
         if target.exists():
             try:
@@ -323,10 +341,12 @@ def sync_inis(game: str, gameuser: str):
             except (OSError, WindowsError):
                 pass
         shutil.copyfile(source, target)
-        log.info("Game.ini synced")
+        log.info(f"Game.ini synced from '{source}'")
     # GameUserSettings.ini
     source = Path(gameuser)
-    if source.exists() and gameuser:
+    if source.is_dir():
+        source = Path(os.path.join(gameuser, "GameUserSettings.ini"))
+    if source.exists() and source.is_file() and gameuser:
         target = Path(fr"{Const.config}\GameUserSettings.ini")
         if target.exists():
             try:
@@ -334,7 +354,7 @@ def sync_inis(game: str, gameuser: str):
             except (OSError, WindowsError):
                 pass
         shutil.copyfile(source, target)
-        log.info("GameUserSettings.ini synced")
+        log.info(f"GameUserSettings.ini synced from '{source}'")
 
 
 def close_teamviewer():
@@ -346,14 +366,14 @@ def close_teamviewer():
         win32gui.PostMessage(i[0], win32con.WM_CLOSE, 0, 0)
 
 
-def launch_ark():
+def launch_ark() -> None:
     tries = 0
     while True:
         tries += 1
         os.system(Const.boot)
-        sleep(5)
+        sleep(10)
         if is_running():
-            break
+            return
         if tries >= 10:
             raise WindowsError("Ark failed to boot and may be corrupt")
 
@@ -361,6 +381,7 @@ def launch_ark():
 def start_ark(images: dict):
     """Click through menu buttons to start server"""
     close_teamviewer()
+    kill("WinStore.App.exe")
     set_resolution()
     if not is_running():
         launch_ark()

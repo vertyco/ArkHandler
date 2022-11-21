@@ -5,7 +5,7 @@ import os
 import sys
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from configparser import ConfigParser
+from configparser import ConfigParser, NoOptionError, NoSectionError
 from datetime import datetime
 from logging import handlers
 from pathlib import Path
@@ -40,7 +40,7 @@ log.addHandler(logfile)
 
 class ArkHandler:
     """Compile with 'pyinstaller.exe --clean main.spec'"""
-    __version__ = "3.1.2"
+    __version__ = "3.1.7"
 
     def __init__(self):
         # Window setup
@@ -87,7 +87,12 @@ class ArkHandler:
     async def initialize(self):
         print(Fore.CYAN + Style.BRIGHT + Const.logo)
         self.loop = asyncio.get_event_loop()
-        self.pull_config()
+        try:
+            self.pull_config()
+        except (NoOptionError, NoSectionError) as e:
+            log.critical(f"Config Error: {e.message}\nPress ENTER to confirm and close ArkHandler")
+            input()
+            return
         log.debug(f"Python version {sys.version}")
         if self.debug:
             info = f"Debug: {self.debug}\n" \
@@ -123,7 +128,7 @@ class ArkHandler:
             return
         parser.read("config.ini")
         prev = self.debug
-        self.debug = parser.getboolean("Settings", "Debug")
+        self.debug = parser.getboolean("UserSettings", "Debug")
         if prev is not None:
             if self.debug and not prev:
                 log.info("Debug has been changed to True")
@@ -135,15 +140,15 @@ class ArkHandler:
         else:
             console.setLevel(logging.INFO)
             logfile.setLevel(logging.INFO)
-        self.netdownkill = parser.getint("Settings", "NetDownKill")
-        self.hook = parser.get("Settings", "WebhookURL").replace('"', "")
-        self.game = parser.get("Settings", "GameiniPath").replace('"', "")
-        self.gameuser = parser.get("Settings", "GameUserSettingsiniPath").replace('"', "")
-        self.autowipe = parser.getboolean("Settings", "AutoWipe")
-        self.clustewipe = parser.getboolean("Settings", "AlsoWipeClusterData")
+        self.netdownkill = parser.getint("UserSettings", "NetDownKill")
+        self.hook = parser.get("UserSettings", "WebhookURL").replace('"', "")
+        self.game = parser.get("UserSettings", "GameiniPath").replace('"', "")
+        self.gameuser = parser.get("UserSettings", "GameUserSettingsiniPath").replace('"', "")
+        self.autowipe = parser.getboolean("UserSettings", "AutoWipe")
+        self.clustewipe = parser.getboolean("UserSettings", "AlsoWipeClusterData")
 
         try:
-            wipetimes_raw = [i.strip() for i in parser.get("Settings", "WipeTimes").strip(r'"').split(",") if i.strip()]
+            wipetimes_raw = [i.strip() for i in parser.get("UserSettings", "WipeTimes").strip(r'"').split(",") if i.strip()]
             if wipetimes_raw:
                 self.wipetimes = [datetime.strptime(i, "%m/%d %H:%M") for i in wipetimes_raw]
         except Exception as e:
@@ -163,8 +168,7 @@ class ArkHandler:
             try:
                 await self.watchdog()
             except Exception:
-                log.warning("Watchdog loop failed!")
-                log.error(traceback.format_exc())
+                log.warning(f"Watchdog loop failed!\n{traceback.format_exc()}")
             await asyncio.sleep(20)
 
     async def watchdog(self):
@@ -196,8 +200,10 @@ class ArkHandler:
             log.info("Reboot complete")
             await send_webhook(self.hook, "Reboot Complete", "Server should be back online.", 65314)
         except Exception as e:
-            log.critical(f"Critical error in ArkHandler!: {traceback.format_exc()}")
-            await send_webhook(self.hook, "CRITICAL ERROR", f"```\n{e}\n```", 16711680)
+            log.critical(f"Critical error in ArkHandler!\n{traceback.format_exc()}")
+            await send_webhook(
+                self.hook, "CRITICAL ERROR", f"```\n{e}\n```Sleeping for 1 hour before trying again", 16711680)
+            await asyncio.sleep(3600)
             return
         finally:
             self.booting = False
@@ -211,8 +217,7 @@ class ArkHandler:
             try:
                 await self.events()
             except Exception:
-                log.warning(f"Event loop failed!")
-                log.error(traceback.format_exc())
+                log.warning(f"Event loop failed!\n{traceback.format_exc()}")
 
     async def events(self):
         server = "localhost"
@@ -226,8 +231,11 @@ class ArkHandler:
             return
 
         for event in events:
-            text = str(event.StringInserts[0])
-            if "-StudioWildcard" in text:
+            event_data = event.StringInserts
+            if not event_data:
+                continue
+            if "-StudioWildcard" in str(event_data[0]):
+                text = str(event_data[0])
                 break
         else:
             return
@@ -270,6 +278,9 @@ class ArkHandler:
                 65314,
                 footer=f"File: {text}"
             )
+            await asyncio.sleep(60)
+            if is_running():
+                kill()
             self.updating = False
             self.installing = False
         else:
@@ -280,21 +291,26 @@ class ArkHandler:
     async def update_loop(self):
         while True:
             await asyncio.sleep(600)
-            if self.checking_updates:
-                continue
-            if self.no_internet:
+            skip_conditions = [
+                self.checking_updates,
+                self.no_internet,
+                self.booting,
+                self.updating
+            ]
+            if any(skip_conditions):
                 continue
             log.debug("Checking for updates")
             self.checking_updates = True
             try:
                 await self.updates()
             except Exception:
-                log.warning(f"Update loop failed!")
-                log.error(traceback.format_exc())
+                log.warning(f"Update loop failed!\n{traceback.format_exc()}")
             finally:
                 self.checking_updates = False
 
     async def updates(self):
+        kill("WinStore.App.exe")
+        await asyncio.sleep(5)
         app = await self.execute(functools.partial(check_updates))
         if not app:
             return
@@ -311,8 +327,7 @@ class ArkHandler:
             try:
                 await self.wipe()
             except Exception:
-                log.warning(f"WIpe loop failed!")
-                log.error(traceback.format_exc())
+                log.warning(f"WIpe loop failed!\n{traceback.format_exc()}")
 
     async def wipe(self):
         self.pull_config()
@@ -352,15 +367,14 @@ class ArkHandler:
             try:
                 await self.internet()
             except Exception:
-                log.warning(f"internet loop failed!")
-                log.error(traceback.format_exc())
+                log.warning(f"internet loop failed!\n{traceback.format_exc()}")
 
     async def internet(self):
         now = datetime.now()
         failed = False
         try:
             async with ClientSession(timeout=ClientTimeout(total=30)) as session:
-                async with session.get("http://www.google.com") as res:
+                async with session.get("https://www.google.com") as res:
                     if res.status < 200 or res.status > 204:
                         failed = True
         except (ClientConnectionError, TimeoutError):
@@ -377,7 +391,8 @@ class ArkHandler:
                         res = await run_rcon("saveworld", self.port, self.passwd)
                         log.warning(f"Server map saved before killing: {res}")
                     except Exception as e:
-                        log.warning(f"Server failed to save before killing: {e}")
+                        if "semaphor" not in str(e):
+                            log.warning(f"Server failed to save before killing: {e}")
                 kill()
         else:
             if self.no_internet:
