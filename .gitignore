@@ -3,5 +3,4 @@
 out
 gen
 *.log
-*.spec
 config.ini
