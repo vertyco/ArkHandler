@@ -16,9 +16,9 @@ import pywintypes
 import win32api
 import win32con
 import win32gui
-from colorama import Fore, Back, Style
+from colorama import Back, Fore, Style
 from pywinauto.application import Application
-from pywinauto.findwindows import ElementNotFoundError, ElementAmbiguousError
+from pywinauto.findwindows import ElementAmbiguousError, ElementNotFoundError
 from pywinauto.timings import TimeoutError
 from rcon.source import rcon
 
@@ -33,23 +33,19 @@ class PrettyFormatter(logging.Formatter):
         logging.INFO: Fore.LIGHTWHITE_EX + Style.BRIGHT + fmt,
         logging.WARNING: Fore.YELLOW + Style.BRIGHT + fmt,
         logging.ERROR: Fore.LIGHTMAGENTA_EX + Style.BRIGHT + fmt,
-        logging.CRITICAL: Fore.LIGHTYELLOW_EX + Back.RED + Style.BRIGHT + fmt
+        logging.CRITICAL: Fore.LIGHTYELLOW_EX + Back.RED + Style.BRIGHT + fmt,
     }
 
     def format(self, record):
         log_fmt = self.formats.get(record.levelno)
-        formatter = logging.Formatter(
-            fmt=log_fmt,
-            datefmt='%m/%d %I:%M:%S %p'
-        )
+        formatter = logging.Formatter(fmt=log_fmt, datefmt="%m/%d %I:%M:%S %p")
         return formatter.format(record)
 
 
 class StandardFormatter(logging.Formatter):
     def format(self, record):
         formatter = logging.Formatter(
-            fmt="%(asctime)s - %(levelname)s - %(message)s",
-            datefmt='%m/%d %I:%M:%S %p'
+            fmt="%(asctime)s - %(levelname)s - %(message)s", datefmt="%m/%d %I:%M:%S %p"
         )
         return formatter.format(record)
 
@@ -64,25 +60,26 @@ class Const:
         "host": (0.12, 0.545),
         "run": (0.494, 0.7675),
         "accept1": (0.418, 0.551),
-        "accept2": (0.568, 0.6905)
+        "accept2": (0.568, 0.6905),
     }
     # Ark paths
-    save_path = fr"{os.environ['LOCALAPPDATA']}\Packages\StudioWildcard.4558480580BB9_1w2mm55455e38\LocalState\Saved"
+    save_path = rf"{os.environ['LOCALAPPDATA']}\Packages\StudioWildcard.4558480580BB9_1w2mm55455e38\LocalState\Saved"
+    cluster_path = rf"{save_path}\clusters\solecluster"
     boot = r"explorer.exe shell:appsFolder\StudioWildcard.4558480580BB9_1w2mm55455e38!AppARKSurvivalEvolved"
-    config = fr"{save_path}\UWPConfig\UWP"
+    config = rf"{save_path}\UWPConfig\UWP"
 
     logo = r"""
-                _    _    _                 _ _           
-     /\        | |  | |  | |               | | |          
-    /  \   _ __| | _| |__| | __ _ _ __   __| | | ___ _ __ 
+                _    _    _                 _ _
+     /\        | |  | |  | |               | | |
+    /  \   _ __| | _| |__| | __ _ _ __   __| | | ___ _ __
    / /\ \ | '__| |/ /  __  |/ _` | '_ \ / _` | |/ _ \ '__|
-  / ____ \| |  |   <| |  | | (_| | | | | (_| | |  __/ |   
- /_/    \_\_|  |_|\_\_|  |_|\__,_|_| |_|\__,_|_|\___|_|                                                                                                                     
-  ___       __   __       _               
- | _ )_  _  \ \ / /__ _ _| |_ _  _ __ ___ 
+  / ____ \| |  |   <| |  | | (_| | | | | (_| | |  __/ |
+ /_/    \_\_|  |_|\_\_|  |_|\__,_|_| |_|\__,_|_|\___|_|
+  ___       __   __       _
+ | _ )_  _  \ \ / /__ _ _| |_ _  _ __ ___
  | _ \ || |  \ V / -_) '_|  _| || / _/ _ \
  |___/\_, |   \_/\___|_|  \__|\_, \__\___/
-      |__/                    |__/        
+      |__/                    |__/
 """
 
     default_config = """
@@ -90,15 +87,15 @@ class Const:
     # NetDownKill: How long(in minutes) internet is down before killing the servers and pausing ArkHandler
     #  - set to 0 to disable
     # WebhookURL: Discord webhook url goes here, you can google how to generate it
-    # GameiniPaht: The path to your backup Game.ini file if you have one
+    # GameiniPath: The path to your backup Game.ini file if you have one
     # GameUserSettingsiniPath: The path you your backup GameUserSettings.ini file
     # AutoWipe: Toggle auto wipe on or off
     # AlsoWipeClusterData: Self explanatory, when a server wipes, toggle to include cluster data
     # WipeTimes: List of times separated by commas in the format "mm/dd HH:MM"
     # Example: 04/10 12:30,08/20 17:00, 01/19 7:45
     # Debug field, if True, shows extra data in the console(for debug purposes)
-    
-    
+
+
     [UserSettings]
     NetDownKill = 3
     WebhookURL = ""
@@ -132,7 +129,10 @@ def get_windows(name: str):
 
 
 def on_screen(path: str, confidence: float = 0.85):
-    return pyautogui.locateOnScreen(path, confidence=confidence)
+    try:
+        return pyautogui.locateOnScreen(path, confidence=confidence)
+    except OSError:
+        return False
 
 
 def click_button(button: str, images: dict):
@@ -140,7 +140,12 @@ def click_button(button: str, images: dict):
     if button in images:
         while True:
             loc = on_screen(images[button])
-            if loc is not None:
+            if loc is None:
+                continue
+            elif loc is False:
+                sleep(30)
+                break
+            else:
                 break
     sleep(1.5)
     # Ark will always be 16:9 aspect ratio
@@ -199,32 +204,27 @@ def set_resolution(width: int = 1280, height: int = 720, default: bool = False):
     win32api.ChangeDisplaySettings(dev, 0)
 
 
-async def send_webhook(url: str, title: str, message: str, color: int, footer: str = None):
+async def send_webhook(
+    url: str, title: str, message: str, color: int, footer: str = None
+):
     """Send a discord webhook"""
     if not url:
         return
     log.debug(f"Sending webhook: {title}")
-    em = {
-        "title": title,
-        "description": message,
-        "color": color
-    }
+    em = {"title": title, "description": message, "color": color}
     if footer:
         em["footer"] = {"text": footer}
     data = {
         "username": "ArkHandler",
         "avatar_url": "https://i.imgur.com/Wv5SsBo.png",
-        "embeds": [em]
+        "embeds": [em],
     }
     headers = {"Content-Type": "application/json"}
     try:
         async with aiohttp.ClientSession() as session:
             timeout = aiohttp.ClientTimeout(total=20)
             async with session.post(
-                    url=url,
-                    data=json.dumps(data),
-                    headers=headers,
-                    timeout=timeout
+                url=url, data=json.dumps(data), headers=headers, timeout=timeout
             ) as res:
                 if res.status != 204:
                     log.warning(f"Failed to send {title} webhook. status {res.status}")
@@ -269,7 +269,7 @@ def is_updating(prog: Application, name: str):
             name.lower() in str(i).lower(),
             "download" in str(i).lower(),
             "installing" in str(i).lower(),
-            "pending" in str(i).lower()
+            "pending" in str(i).lower(),
         ]
         if any(conditions):
             return True
@@ -281,20 +281,34 @@ def check_updates():
     """Check MS store for updates"""
     try:
         if not is_running("WinStore.App.exe"):
-            os.system("explorer.exe shell:appsFolder\Microsoft.WindowsStore_8wekyb3d8bbwe!App")
+            os.system(
+                "explorer.exe shell:appsFolder\Microsoft.WindowsStore_8wekyb3d8bbwe!App"
+            )
         app = Application(backend="uia")
+        tries = 0
         while True:
+            tries += 1
+            if tries >= 10:
+                log.error("Cannot find Microsoft Store app")
+                return None
             try:
                 app = app.connect(title="Microsoft Store")
                 break
             except ElementNotFoundError:
                 sleep(1)
                 continue
+            except Exception as e:
+                log.error(f"Failed to get Microsoft Store app: {e}")
+                sleep(1)
+                continue
 
         windows = get_windows("Microsoft Store")
         if len(windows) > 1 and windows[0][2][1] == 1:
             for i in windows:
-                win32gui.ShowWindow(i[0], win32con.SW_RESTORE)
+                try:
+                    win32gui.ShowWindow(i[0], win32con.SW_RESTORE)
+                except Exception as e:
+                    log.error(f"Failed to restore microsoft store window: {e}")
 
         dlg = app.top_window()
         # Library button
@@ -334,7 +348,7 @@ def sync_inis(game: str, gameuser: str):
     if source.is_dir():
         source = Path(os.path.join(game, "Game.ini"))
     if source.exists() and source.is_file() and game:
-        target = Path(fr"{Const.config}\Game.ini")
+        target = Path(rf"{Const.config}\Game.ini")
         if target.exists():
             try:
                 os.remove(target)
@@ -347,7 +361,7 @@ def sync_inis(game: str, gameuser: str):
     if source.is_dir():
         source = Path(os.path.join(gameuser, "GameUserSettings.ini"))
     if source.exists() and source.is_file() and gameuser:
-        target = Path(fr"{Const.config}\GameUserSettings.ini")
+        target = Path(rf"{Const.config}\GameUserSettings.ini")
         if target.exists():
             try:
                 os.remove(target)
@@ -400,30 +414,32 @@ def start_ark(images: dict):
 
 def wipe_server(include_cluster: bool = False):
     log.warning("WIPING SERVER")
-    kill()
+    paths_to_delete = []
+
     if include_cluster:
         log.info("Also wiping cluster data")
-        cpath = Path(fr"{Const.save_path}\clusters\solecluster")
-        data = [i for i in cpath.iterdir()]
-        for arkdata in data:
-            os.remove(os.path.join(cpath, str(arkdata)))
-    servers = Path(fr"{Const.save_path}\Maps")
-    paths_to_delete = []
-    for folder in servers.iterdir():
-        if "painting" in folder.name.lower():
-            continue
-        if "sync" in folder.name.lower():
-            continue
-        for item in folder.iterdir():
-            if item.is_dir():
-                for file in item.iterdir():
-                    if file.is_dir():
-                        continue
+        cpath = Path(rf"{Const.save_path}\clusters\solecluster")
+        for i in cpath.iterdir():
+            paths_to_delete.append(i)
+
+    servers = Path(rf"{Const.save_path}\Maps")
+    for mapfolder in servers.iterdir():
+        for submapfolder_or_mapfile in mapfolder.iterdir():
+            if submapfolder_or_mapfile.is_dir():
+                for file in submapfolder_or_mapfile.iterdir():
                     paths_to_delete.append(file)
             else:
-                paths_to_delete.append(item)
+                paths_to_delete.append(submapfolder_or_mapfile)
 
-    to_del = [i for i in paths_to_delete if "ban" not in i.name.lower() and "paint" not in i.name.lower()]
+    def filecheck(path: Path):
+        conditions = [
+            "sync" not in path.name.lower(),
+            "ban" not in path.name.lower(),
+            "paint" not in path.name.lower(),
+        ]
+        return all(conditions)
+
+    to_del = [i for i in paths_to_delete if filecheck(i)]
     for i in to_del:
         os.remove(i)
     log.info(f"Deleted {len(to_del)} files")
@@ -439,12 +455,7 @@ def get_rcon_info():
 
 
 async def run_rcon(command: str, port: int, passwd: str):
-    res = await rcon(
-        command=command,
-        host="localhost",
-        port=int(port),
-        passwd=passwd
-    )
+    res = await rcon(command=command, host="localhost", port=int(port), passwd=passwd)
     return res
 
 
