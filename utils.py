@@ -63,9 +63,10 @@ class Const:
         "accept2": (0.568, 0.6905),
     }
     # Ark paths
-    save_path = rf"{os.environ['LOCALAPPDATA']}\Packages\StudioWildcard.4558480580BB9_1w2mm55455e38\LocalState\Saved"
+    app = "StudioWildcard.4558480580BB9_1w2mm55455e38"
+    save_path = rf"{os.environ['LOCALAPPDATA']}\Packages\{app}\LocalState\Saved"
     cluster_path = rf"{save_path}\clusters\solecluster"
-    boot = r"explorer.exe shell:appsFolder\StudioWildcard.4558480580BB9_1w2mm55455e38!AppARKSurvivalEvolved"
+    boot = rf"explorer.exe shell:appsFolder\{app}!AppARKSurvivalEvolved"
     config = rf"{save_path}\UWPConfig\UWP"
 
     logo = r"""
@@ -455,7 +456,7 @@ def get_rcon_info():
 
 
 async def run_rcon(command: str, port: int, passwd: str):
-    res = await rcon(command=command, host="localhost", port=int(port), passwd=passwd)
+    res = await rcon(command=command, host="127.0.0.1", port=int(port), passwd=passwd)
     return res
 
 

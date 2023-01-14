@@ -55,13 +55,13 @@ log.addHandler(logfile)
 class ArkHandler:
     """Compile with 'pyinstaller.exe --clean main.spec'"""
 
-    __version__ = "3.2.15"
+    __version__ = "3.2.18"
 
     def __init__(self):
         # Handlers
         self.loop = None
         self.threadpool = ThreadPoolExecutor(
-            max_workers=5, thread_name_prefix="arkhandler"
+            max_workers=8, thread_name_prefix="arkhandler"
         )
 
         # Config
@@ -107,6 +107,7 @@ class ArkHandler:
         self.last_online = datetime.now()  # Timestamp of when server was last online
 
     async def initialize(self):
+        os.system(f'CheckNetIsolation LoopbackExempt -a -n="{Const().app}"')
         print(Fore.CYAN + Style.BRIGHT + Const.logo)
         self.loop = asyncio.get_event_loop()
         try:
@@ -241,7 +242,9 @@ class ArkHandler:
         if self.running:
             log.warning("Ark is no longer running")
             self.running = False
-        if any([self.updating, self.checking_updates, self.booting, self.no_internet]):
+        if any(
+            [self.installing, self.checking_updates, self.booting, self.no_internet]
+        ):
             return
         log.info("Syncing ini files")
         await self.execute(functools.partial(sync_inis, self.game, self.gameuser))
@@ -365,6 +368,7 @@ class ArkHandler:
             kill()
             self.updating = False
             self.installing = False
+            log.warning("Restarting the loop")
         else:
             log.warning(f"No event for '{text}' with ID {eid}")
 

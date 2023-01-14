@@ -6,7 +6,7 @@ block_cipher = None
 
 a = Analysis(
     ['arkhandler.py'],
-    pathex=['H:\Drive\Projects\PyProjects\arkparser'],
+    pathex=['.'],
     binaries=[],
     datas=[('assets/*.PNG', 'assets')],
     hiddenimports=[],
@@ -42,5 +42,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     uac_admin=True,
-    icon=['assets\\raptor.ico'],
+    icon='assets/raptor.ico',
 )
