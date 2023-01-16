@@ -9,3 +9,4 @@ pywin32-ctypes~=0.2.0
 pywinauto~=0.6.8
 rcon~=2.3.6
 pre-commit~=2.21.0
+pyinstaller~=5.7.0

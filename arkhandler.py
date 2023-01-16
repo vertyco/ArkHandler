@@ -55,7 +55,7 @@ log.addHandler(logfile)
 class ArkHandler:
     """Compile with 'pyinstaller.exe --clean main.spec'"""
 
-    __version__ = "3.2.18"
+    __version__ = "3.2.19"
 
     def __init__(self):
         # Handlers
