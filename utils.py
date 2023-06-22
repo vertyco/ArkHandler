@@ -1,53 +1,23 @@
 import contextlib
 import json
-import logging
 import os
-import shutil
-import traceback
 from configparser import ConfigParser
 from pathlib import Path
 from time import sleep
 
 import aiohttp
-import colorama
 import psutil
 import pyautogui
 import pywintypes
 import win32api
 import win32con
 import win32gui
-from colorama import Back, Fore, Style
 from pywinauto.application import Application
 from pywinauto.findwindows import ElementAmbiguousError, ElementNotFoundError
 from pywinauto.timings import TimeoutError
 from rcon.source import rcon
 
-log = logging.getLogger("arkhandler")
-
-
-class PrettyFormatter(logging.Formatter):
-    colorama.init(autoreset=True)
-    fmt = "%(asctime)s - %(levelname)s - %(message)s"
-    formats = {
-        logging.DEBUG: Fore.LIGHTGREEN_EX + Style.BRIGHT + fmt,
-        logging.INFO: Fore.LIGHTWHITE_EX + Style.BRIGHT + fmt,
-        logging.WARNING: Fore.YELLOW + Style.BRIGHT + fmt,
-        logging.ERROR: Fore.LIGHTMAGENTA_EX + Style.BRIGHT + fmt,
-        logging.CRITICAL: Fore.LIGHTYELLOW_EX + Back.RED + Style.BRIGHT + fmt,
-    }
-
-    def format(self, record):
-        log_fmt = self.formats.get(record.levelno)
-        formatter = logging.Formatter(fmt=log_fmt, datefmt="%m/%d %I:%M:%S %p")
-        return formatter.format(record)
-
-
-class StandardFormatter(logging.Formatter):
-    def format(self, record):
-        formatter = logging.Formatter(
-            fmt="%(asctime)s - %(levelname)s - %(message)s", datefmt="%m/%d %I:%M:%S %p"
-        )
-        return formatter.format(record)
+from logger import log
 
 
 class Const:
@@ -147,6 +117,7 @@ def click_button(button: str, images: dict):
                 sleep(30)
                 break
             else:
+                log.debug(f"{button} button located")
                 break
     sleep(1.5)
     # Ark will always be 16:9 aspect ratio
@@ -205,9 +176,7 @@ def set_resolution(width: int = 1280, height: int = 720, default: bool = False):
     win32api.ChangeDisplaySettings(dev, 0)
 
 
-async def send_webhook(
-    url: str, title: str, message: str, color: int, footer: str = None
-):
+async def send_webhook(url: str, title: str, message: str, color: int, footer: str = None):
     """Send a discord webhook"""
     if not url:
         return
@@ -232,17 +201,23 @@ async def send_webhook(
                 else:
                     log.debug(f"{title} webhook sent successfully")
     except Exception as e:
-        log.warning(f"Failed to send {title} webhook: {e}")
+        log.error(f"Failed to send {title} webhook", exc_info=e)
 
 
 def kill(process: str = "ShooterGame.exe"):
     """Kill a process"""
-    [p.kill() for p in psutil.process_iter() if p.name() == process]
+    try:
+        [p.kill() for p in psutil.process_iter() if p.name() == process]
+    except Exception as e:
+        log.error(f"Exceeption while killing {process}", exc_info=e)
 
 
 def is_running(process: str = "ShooterGame.exe"):
     """Check if a process is running"""
-    running = [p.name() for p in psutil.process_iter()]
+    try:
+        running = [p.name() for p in psutil.process_iter()]
+    except psutil.NoSuchProcess:
+        return False
     return process in running
 
 
@@ -282,9 +257,7 @@ def check_updates():
     """Check MS store for updates"""
     try:
         if not is_running("WinStore.App.exe"):
-            os.system(
-                "explorer.exe shell:appsFolder\Microsoft.WindowsStore_8wekyb3d8bbwe!App"
-            )
+            os.system(r"explorer.exe shell:appsFolder\Microsoft.WindowsStore_8wekyb3d8bbwe!App")
         app = Application(backend="uia")
         tries = 0
         while True:
@@ -299,7 +272,7 @@ def check_updates():
                 sleep(1)
                 continue
             except Exception as e:
-                log.error(f"Failed to get Microsoft Store app: {e}")
+                log.error("Failed to get Microsoft Store app", exc_info=e)
                 sleep(1)
                 continue
 
@@ -309,7 +282,7 @@ def check_updates():
                 try:
                     win32gui.ShowWindow(i[0], win32con.SW_RESTORE)
                 except Exception as e:
-                    log.error(f"Failed to restore microsoft store window: {e}")
+                    log.error("Failed to restore microsoft store window", exc_info=e)
 
         dlg = app.top_window()
         # Library button
@@ -336,40 +309,44 @@ def check_updates():
         for i in windows:
             win32gui.ShowWindow(i[0], win32con.SW_MINIMIZE)
         return app
-    except Exception:
-        log.error(traceback.format_exc())
+    except Exception as e:
+        log.error("Failed to check for updates!", exc_info=e)
+
+
+def sync_file(source: str, filename: str):
+    source = Path(source)
+    if not source.exists():
+        log.warning(f"{filename} source doesn't exist: {source}")
+        return
+
+    if source.is_dir():
+        source = Path(os.path.join(source, filename))
+    if not source.exists():
+        log.warning(f"{filename} source file not found: {source}")
+        return
+    target = os.path.join(Const.config, filename)
+    try:
+        with open(rf"{source}", "rb") as src:
+            with open(rf"{target}", "wb") as tgt:
+                tgt.write(src.read())
+        log.info(f"Game.ini synced from {source}")
+    except Exception as e:
+        log.error(f"Failed to sync {filename} file", exc_info=e)
 
 
 def sync_inis(game: str, gameuser: str):
     """Update ark UWP config files"""
+    log.info("Syncing ini files")
     if not Path(Const.config).exists():
+        log.warning("Cannot find UWP path, config not synced!")
         return
-    # Game.ini
-    source = Path(game)  # File to sync
-    if source.is_dir():
-        source = Path(os.path.join(game, "Game.ini"))
-    if source.exists() and source.is_file() and game:
-        target = Path(rf"{Const.config}\Game.ini")
-        if target.exists():
-            try:
-                os.remove(target)
-            except (OSError, WindowsError):
-                pass
-        shutil.copyfile(source, target)
-        log.info(f"Game.ini synced from '{source}'")
-    # GameUserSettings.ini
-    source = Path(gameuser)
-    if source.is_dir():
-        source = Path(os.path.join(gameuser, "GameUserSettings.ini"))
-    if source.exists() and source.is_file() and gameuser:
-        target = Path(rf"{Const.config}\GameUserSettings.ini")
-        if target.exists():
-            try:
-                os.remove(target)
-            except (OSError, WindowsError):
-                pass
-        shutil.copyfile(source, target)
-        log.info(f"GameUserSettings.ini synced from '{source}'")
+
+    # Sync Game.ini
+    if game:
+        sync_file(game, "Game.ini")
+    # Sync GameUserSettings.ini
+    if gameuser:
+        sync_file(gameuser, "GameUserSettings.ini")
 
 
 def close_teamviewer():
@@ -386,11 +363,12 @@ def launch_ark() -> None:
     while True:
         tries += 1
         os.system(Const.boot)
-        sleep(10)
+        sleep(15)
         if is_running():
             return
+        kill()
         if tries >= 10:
-            raise WindowsError("Ark failed to boot and may be corrupt")
+            raise WindowsError("Ark failed to launch and may be corrupt")
 
 
 def start_ark(images: dict):
@@ -402,7 +380,7 @@ def start_ark(images: dict):
         launch_ark()
     windows = get_windows("ark: survival evolved")
     if not windows:
-        raise WindowsError("Ark failed to boot and may be corrupt")
+        raise WindowsError("Failed to fetch windows for Ark")
     for i in windows:
         win32gui.ShowWindow(i[0], win32con.SW_MAXIMIZE)
     click_button("start", images)

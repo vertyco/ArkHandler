@@ -1,5 +1,4 @@
 import asyncio
-import functools
 import logging
 import os
 import sys
@@ -7,18 +6,17 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from datetime import datetime
-from logging import handlers
 from pathlib import Path
 from subprocess import DEVNULL, call
 
+import cv2
 import win32evtlog
-from aiohttp import ClientConnectionError, ClientSession, ClientTimeout
+from aiohttp import ClientSession, ClientTimeout
 from colorama import Fore, Style
 
+from logger import console, log, logfile
 from utils import (
     Const,
-    PrettyFormatter,
-    StandardFormatter,
     check_updates,
     get_rcon_info,
     is_running,
@@ -36,33 +34,17 @@ from utils import (
 
 # Config setup
 parser = ConfigParser()
-# Log setup
-log = logging.getLogger("arkhandler")
-log.setLevel(logging.DEBUG)
-# Console logs
-console = logging.StreamHandler()
-console.setFormatter(PrettyFormatter())
-# File logs
-logfile = handlers.RotatingFileHandler(
-    "logs.log", mode="a", maxBytes=5 * 1024 * 1024, backupCount=3
-)
-logfile.setFormatter(StandardFormatter())
-# Add handlers
-log.addHandler(console)
-log.addHandler(logfile)
 
 
 class ArkHandler:
     """Compile with 'pyinstaller.exe --clean main.spec'"""
 
-    __version__ = "3.2.19"
+    __version__ = "3.3.0"
 
     def __init__(self):
         # Handlers
         self.loop = None
-        self.threadpool = ThreadPoolExecutor(
-            max_workers=8, thread_name_prefix="arkhandler"
-        )
+        self.threadpool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="arkhandler")
 
         # Config
         self.configmtime = None
@@ -87,10 +69,10 @@ class ArkHandler:
         # Images
         self.assets = os.path.join(self.root, "assets")
         self.images = {
-            "start": rf"{self.assets}\start.PNG",
-            "host": rf"{self.assets}\host.PNG",
-            "run": rf"{self.assets}\run.PNG",
-            "loaded": rf"{self.assets}\loaded.PNG",
+            "start": cv2.imread(os.path.join(self.assets, "start.PNG"), cv2.IMREAD_COLOR),
+            "host": cv2.imread(os.path.join(self.assets, "host.PNG"), cv2.IMREAD_COLOR),
+            "run": cv2.imread(os.path.join(self.assets, "run.PNG"), cv2.IMREAD_COLOR),
+            "loaded": cv2.imread(os.path.join(self.assets, "loaded.PNG"), cv2.IMREAD_COLOR),
         }
 
         # States
@@ -101,9 +83,7 @@ class ArkHandler:
         self.booting = False  # Is booting up
         self.last_update = None  # Time of last event update
         self.no_internet = False  # Whether script can ping google
-        self.netdownkill = (
-            0  # Time in minutes for internet to be down before killing server
-        )
+        self.netdownkill = 0  # Time in minutes for internet to be down before killing server
         self.last_online = datetime.now()  # Timestamp of when server was last online
 
     async def initialize(self):
@@ -113,9 +93,7 @@ class ArkHandler:
         try:
             self.pull_config()
         except (NoOptionError, NoSectionError) as e:
-            log.critical(
-                f"Config Error: {e.message}\nPress ENTER to confirm and close ArkHandler"
-            )
+            log.critical(f"Config Error: {e.message}\nPress ENTER to confirm and close ArkHandler")
             input()
             return
         log.debug(f"Python version {sys.version}")
@@ -142,10 +120,6 @@ class ArkHandler:
         ]
         log.info("Starting task loops")
         await asyncio.gather(*tasks)
-
-    async def execute(self, partial_function: functools.partial):
-        result = await self.loop.run_in_executor(self.threadpool, partial_function)
-        return result
 
     def pull_config(self):
         conf = Path("config.ini")
@@ -174,9 +148,7 @@ class ArkHandler:
         self.netdownkill = settings.getint("NetDownKill", fallback=0)
         self.hook = settings.get("WebhookURL", fallback="").replace('"', "")
         self.game = settings.get("GameiniPath", fallback="").replace('"', "")
-        self.gameuser = settings.get("GameUserSettingsiniPath", fallback="").replace(
-            '"', ""
-        )
+        self.gameuser = settings.get("GameUserSettingsiniPath", fallback="").replace('"', "")
         self.autowipe = settings.getboolean("AutoWipe", fallback=False)
         self.clustewipe = settings.getboolean("AlsoWipeClusterData", fallback=False)
 
@@ -227,8 +199,8 @@ class ArkHandler:
             log.debug("Checking if Ark is running")
             try:
                 await self.watchdog()
-            except Exception:
-                log.warning(f"Watchdog loop failed!\n{traceback.format_exc()}")
+            except Exception as e:
+                log.error("Watchdog loop failed!", exc_info=e)
             await asyncio.sleep(20)
 
     async def watchdog(self):
@@ -242,34 +214,27 @@ class ArkHandler:
         if self.running:
             log.warning("Ark is no longer running")
             self.running = False
-        if any(
-            [self.installing, self.checking_updates, self.booting, self.no_internet]
-        ):
+        if any([self.installing, self.checking_updates, self.booting, self.no_internet]):
             return
-        log.info("Syncing ini files")
-        await self.execute(functools.partial(sync_inis, self.game, self.gameuser))
-        await send_webhook(
-            self.hook, "Server Down", "Beginning reboot sequence...", 16739584
-        )
+
+        sync_inis(self.game, self.gameuser)
+        if not self.debug:
+            await send_webhook(self.hook, "Server Down", "Beginning reboot sequence...", 16739584)
         self.booting = True
         log.info("Beginning reboot sequence")
         try:
-            await self.execute(functools.partial(start_ark, self.images))
-            await send_webhook(self.hook, "Booting", "Loading server files...", 19357)
+            await asyncio.to_thread(start_ark, self.images)
+            if not self.debug:
+                await send_webhook(self.hook, "Booting", "Loading server files...", 19357)
             await asyncio.sleep(10)
-            call(
-                "net stop LicenseManager", stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL
-            )
+            call("net stop LicenseManager", stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
             while True:
                 if not is_running():
                     self.booting = False
-                    await send_webhook(
-                        self.hook, "Boot Failed", "Trying again...", 19357
-                    )
+                    if not self.debug:
+                        await send_webhook(self.hook, "Boot Failed", "Trying again...", 19357)
                     return
-                loc = await self.execute(
-                    functools.partial(on_screen, self.images["loaded"])
-                )
+                loc = await asyncio.to_thread(on_screen, self.images["loaded"])
                 if loc is None:
                     continue
                 elif loc is False:
@@ -279,17 +244,19 @@ class ArkHandler:
                 else:
                     break
             log.info("Reboot complete")
-            await send_webhook(
-                self.hook, "Reboot Complete", "Server should be back online.", 65314
-            )
+            if not self.debug:
+                await send_webhook(
+                    self.hook, "Reboot Complete", "Server should be back online.", 65314
+                )
         except Exception as e:
             log.critical(f"Critical error in ArkHandler!\n{traceback.format_exc()}")
-            await send_webhook(
-                self.hook,
-                "CRITICAL ERROR",
-                f"```\n{e}\n```Sleeping for 30 minutes before trying again",
-                16711680,
-            )
+            if not self.debug:
+                await send_webhook(
+                    self.hook,
+                    "CRITICAL ERROR",
+                    f"```\n{e}\n```Sleeping for 30 minutes before trying again",
+                    16711680,
+                )
             await asyncio.sleep(1800)
             return
         finally:
@@ -303,17 +270,15 @@ class ArkHandler:
             log.debug("Checking event log")
             try:
                 await self.events()
-            except Exception:
-                log.warning(f"Event loop failed!\n{traceback.format_exc()}")
+            except Exception as e:
+                log.error("Event loop failed!", exc_info=e)
 
     async def events(self):
         server = "localhost"
         logtype = "System"
         now = datetime.now()
         handle = win32evtlog.OpenEventLog(server, logtype)
-        flags = (
-            win32evtlog.EVENTLOG_SEQUENTIAL_READ | win32evtlog.EVENTLOG_BACKWARDS_READ
-        )
+        flags = win32evtlog.EVENTLOG_SEQUENTIAL_READ | win32evtlog.EVENTLOG_BACKWARDS_READ
         events = win32evtlog.ReadEventLog(handle, flags, 0)
         if not events:
             log.info("No events to pull")
@@ -389,20 +354,20 @@ class ArkHandler:
             self.checking_updates = True
             try:
                 await self.updates()
-            except Exception:
-                log.warning(f"Update loop failed!\n{traceback.format_exc()}")
+            except Exception as e:
+                log.error("Update loop failed!", exc_info=e)
             finally:
                 self.checking_updates = False
 
     async def updates(self):
         kill("WinStore.App.exe")
         await asyncio.sleep(5)
-        app = await self.execute(functools.partial(check_updates))
+        app = await asyncio.to_thread(check_updates)
         if not app:
             return
-        ready = await self.execute(functools.partial(update_ready, app, "ark"))
+        ready = await asyncio.to_thread(update_ready, app, "ark")
         await asyncio.sleep(30)
-        updating = await self.execute(functools.partial(is_updating, app, "ark"))
+        updating = await asyncio.to_thread(is_updating, app, "ark")
         if not any([ready, updating]):
             kill("WinStore.App.exe")
 
@@ -412,8 +377,8 @@ class ArkHandler:
             log.debug("Checking for wipes")
             try:
                 await self.wipe()
-            except Exception:
-                log.warning(f"WIpe loop failed!\n{traceback.format_exc()}")
+            except Exception as e:
+                log.error("WIpe loop failed!", exc_info=e)
 
     async def wipe(self):
         self.pull_config()
@@ -439,12 +404,10 @@ class ArkHandler:
             return
         self.booting = True
         try:
-            await send_webhook(
-                self.hook, "WIPING SERVER", "Shutting down to wipe...", 16776960
-            )
+            await send_webhook(self.hook, "WIPING SERVER", "Shutting down to wipe...", 16776960)
             kill()
             await asyncio.sleep(10)
-            await self.execute(functools.partial(wipe_server, self.clustewipe))
+            await asyncio.to_thread(wipe_server, self.clustewipe)
             await asyncio.sleep(65)
         finally:
             self.booting = False
@@ -457,8 +420,8 @@ class ArkHandler:
             log.debug("Checking internet connection")
             try:
                 await self.internet()
-            except Exception:
-                log.warning(f"internet loop failed!\n{traceback.format_exc()}")
+            except Exception as e:
+                log.error("internet loop failed!", exc_info=e)
 
     async def internet(self):
         now = datetime.now()
@@ -468,7 +431,7 @@ class ArkHandler:
                 async with session.get("https://www.google.com") as res:
                     if res.status < 200 or res.status > 204:
                         failed = True
-        except (ClientConnectionError, TimeoutError):
+        except Exception:
             failed = True
 
         if failed:
@@ -483,12 +446,13 @@ class ArkHandler:
                         log.warning(f"Server map saved before killing: {res}")
                     except Exception as e:
                         if "semaphor" not in str(e):
-                            log.warning(f"Server failed to save before killing: {e}")
+                            log.error("Server failed to save before killing", exc_info=e)
                 kill()
         else:
             if self.no_internet:
-                log.warning("Internet is back up!")
+                log.warning("Internet is back up! Rebooting in 2 minutes")
             self.last_online = now
+            await asyncio.sleep(120)
             self.no_internet = False
 
 
