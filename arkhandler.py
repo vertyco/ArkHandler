@@ -2,8 +2,6 @@ import asyncio
 import logging
 import os
 import sys
-import traceback
-from concurrent.futures import ThreadPoolExecutor
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +17,7 @@ from utils import (
     Const,
     check_updates,
     get_rcon_info,
+    init_sentry,
     is_running,
     is_updating,
     kill,
@@ -39,12 +38,11 @@ parser = ConfigParser()
 class ArkHandler:
     """Compile with 'pyinstaller.exe --clean main.spec'"""
 
-    __version__ = "3.3.0"
+    __version__ = "3.3.1"
 
     def __init__(self):
         # Handlers
         self.loop = None
-        self.threadpool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="arkhandler")
 
         # Config
         self.configmtime = None
@@ -110,6 +108,14 @@ class ArkHandler:
             print(Fore.CYAN + info)
         if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
             log.debug(f"Running as EXE - {self.root}")
+            prod = True
+        else:
+            prod = False
+        init_sentry(
+            dsn="https://86fca5a91ba94f50b7bf6ab6505dee58@sentry.vertyco.net/3",
+            version=self.__version__,
+            is_prod=prod,
+        )
         tasks = [
             self.running_loop(),
             self.watchdog_loop(),
@@ -249,15 +255,15 @@ class ArkHandler:
                     self.hook, "Reboot Complete", "Server should be back online.", 65314
                 )
         except Exception as e:
-            log.critical(f"Critical error in ArkHandler!\n{traceback.format_exc()}")
+            log.critical("Critical error in ArkHandler!", exc_info=e)
             if not self.debug:
                 await send_webhook(
                     self.hook,
                     "CRITICAL ERROR",
-                    f"```\n{e}\n```Sleeping for 30 minutes before trying again",
+                    f"```\n{e}\n```Sleeping for 10 minutes before trying again",
                     16711680,
                 )
-            await asyncio.sleep(1800)
+            await asyncio.sleep(600)
             return
         finally:
             self.booting = False
@@ -461,8 +467,8 @@ if __name__ == "__main__":
         asyncio.run(ArkHandler().initialize())
     except KeyboardInterrupt:
         pass
-    except Exception:
-        log.critical(f"Arkhandler failed to start!!!\n{traceback.format_exc()}")
+    except Exception as e:
+        log.critical("Arkhandler failed to start!!!", exc_info=e)
     finally:
         log.info("Arkhandler shutting down...")
         set_resolution(default=True)

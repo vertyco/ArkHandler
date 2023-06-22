@@ -9,6 +9,7 @@ import aiohttp
 import psutil
 import pyautogui
 import pywintypes
+import sentry_sdk
 import win32api
 import win32con
 import win32gui
@@ -16,6 +17,7 @@ from pywinauto.application import Application
 from pywinauto.findwindows import ElementAmbiguousError, ElementNotFoundError
 from pywinauto.timings import TimeoutError
 from rcon.source import rcon
+from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
 from logger import log
 
@@ -77,6 +79,26 @@ class Const:
     WipeTimes =
     Debug = False
     """
+
+
+def init_sentry(dsn: str, version: str, is_prod: bool) -> None:
+    """Initializes Sentry SDK.
+
+    Parameters
+    ----------
+    dsn: str
+        The Sentry DSN to use.
+    version: str
+        The version of the application.
+    is_prod: bool
+        Whether the application is running in production or not.
+    """
+    sentry_sdk.init(
+        dsn=dsn,
+        integrations=[AioHttpIntegration()],
+        release=version,
+        environment="prod" if is_prod else "dev",
+    )
 
 
 def get_windows(name: str):
