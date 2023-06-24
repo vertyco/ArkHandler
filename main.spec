@@ -5,10 +5,10 @@ block_cipher = None
 
 
 a = Analysis(
-    ['arkhandler.py'],
+    ['main.py'],
     pathex=['.'],
     binaries=[],
-    datas=[('assets/*.PNG', 'assets')],
+    datas=[('assets/*', 'assets')],
     hiddenimports=[],
     hookspath=['extra-hooks'],
     hooksconfig={},

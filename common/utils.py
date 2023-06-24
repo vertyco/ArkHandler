@@ -1,5 +1,6 @@
 import contextlib
 import json
+import logging
 import os
 from configparser import ConfigParser
 from pathlib import Path
@@ -19,7 +20,7 @@ from pywinauto.timings import TimeoutError
 from rcon.source import rcon
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 
-from logger import log
+log = logging.getLogger("ArkHandler.utils")
 
 
 class Const:
@@ -41,47 +42,8 @@ class Const:
     boot = rf"explorer.exe shell:appsFolder\{app}!AppARKSurvivalEvolved"
     config = rf"{save_path}\UWPConfig\UWP"
 
-    logo = r"""
-                _    _    _                 _ _
-     /\        | |  | |  | |               | | |
-    /  \   _ __| | _| |__| | __ _ _ __   __| | | ___ _ __
-   / /\ \ | '__| |/ /  __  |/ _` | '_ \ / _` | |/ _ \ '__|
-  / ____ \| |  |   <| |  | | (_| | | | | (_| | |  __/ |
- /_/    \_\_|  |_|\_\_|  |_|\__,_|_| |_|\__,_|_|\___|_|
-  ___       __   __       _
- | _ )_  _  \ \ / /__ _ _| |_ _  _ __ ___
- | _ \ || |  \ V / -_) '_|  _| || / _/ _ \
- |___/\_, |   \_/\___|_|  \__|\_, \__\___/
-      |__/                    |__/
-"""
 
-    default_config = """
-    # OPTIONS
-    # NetDownKill: How long(in minutes) internet is down before killing the servers and pausing ArkHandler
-    #  - set to 0 to disable
-    # WebhookURL: Discord webhook url goes here, you can google how to generate it
-    # GameiniPath: The path to your backup Game.ini file if you have one
-    # GameUserSettingsiniPath: The path you your backup GameUserSettings.ini file
-    # AutoWipe: Toggle auto wipe on or off
-    # AlsoWipeClusterData: Self explanatory, when a server wipes, toggle to include cluster data
-    # WipeTimes: List of times separated by commas in the format "mm/dd HH:MM"
-    # Example: 04/10 12:30,08/20 17:00, 01/19 7:45
-    # Debug field, if True, shows extra data in the console(for debug purposes)
-
-
-    [UserSettings]
-    NetDownKill = 3
-    WebhookURL = ""
-    GameiniPath = ""
-    GameUserSettingsiniPath = ""
-    AutoWipe = False
-    AlsoWipeClusterData = False
-    WipeTimes =
-    Debug = False
-    """
-
-
-def init_sentry(dsn: str, version: str, is_prod: bool) -> None:
+def init_sentry(dsn: str, version: str) -> None:
     """Initializes Sentry SDK.
 
     Parameters
@@ -90,14 +52,12 @@ def init_sentry(dsn: str, version: str, is_prod: bool) -> None:
         The Sentry DSN to use.
     version: str
         The version of the application.
-    is_prod: bool
-        Whether the application is running in production or not.
     """
     sentry_sdk.init(
         dsn=dsn,
         integrations=[AioHttpIntegration()],
         release=version,
-        environment="prod" if is_prod else "dev",
+        environment="windows",
     )
 
 
@@ -458,7 +418,3 @@ def get_rcon_info():
 async def run_rcon(command: str, port: int, passwd: str):
     res = await rcon(command=command, host="127.0.0.1", port=int(port), passwd=passwd)
     return res
-
-
-if __name__ == "__main__":
-    check_updates()
