@@ -24,7 +24,7 @@ jobs:
         pip install pyinstaller
 
     - name: Build with PyInstaller
-      run: pyinstaller --debug=all main.spec
+      run: pyinstaller main.spec
 
     - name: List contents of dist folder
       run: dir dist
