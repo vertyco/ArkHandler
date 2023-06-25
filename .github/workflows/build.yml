@@ -24,10 +24,13 @@ jobs:
         pip install pyinstaller
 
     - name: Build with PyInstaller
-      run: pyinstaller main.spec
+      run: pyinstaller.exe main.spec
 
     - name: List contents of dist folder
       run: dir dist
+
+    - name: Test built executable
+      run: ./dist/ArkHandler.exe
 
     - name: Create Release
       id: create_release
