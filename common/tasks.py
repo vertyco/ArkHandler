@@ -16,6 +16,7 @@ from common.logger import init_logging
 from common.scheduler import scheduler
 from common.utils import (
     Const,
+    check_for_updates,
     check_updates,
     get_rcon_info,
     init_sentry,
@@ -73,6 +74,9 @@ class ArkHandler:
         self.banner = Path(os.path.join(self.assets, "banner.txt")).read_text()
 
         # States
+        self.is_exe = (
+            True if (getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")) else False
+        )
         self.running = False  # Ark is running
         self.checking_updates = False  # Checking for updates
         self.updating = False  # Is updating
@@ -109,7 +113,9 @@ class ArkHandler:
                 f"WipeTimes: {self.wipetimes}"
             )
             print(Fore.CYAN + info)
-        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+
+        now = datetime.now()
+        if self.is_exe:
             log.debug(f"Running as EXE - {self.root}")
             try:
                 init_sentry(
@@ -119,7 +125,15 @@ class ArkHandler:
             except Exception as e:
                 log.error("Failed to initialize Sentry", exc_info=e)
 
-        now = datetime.now()
+            scheduler.add_job(
+                self.updater,
+                trigger="interval",
+                seconds=30,
+                next_run_time=now + timedelta(seconds=5),
+                id="Handler.github_update_checker",
+                max_instances=1,
+            )
+
         # Program bar animation
         asyncio.create_task(self.running_loop())
         scheduler.add_job(
@@ -181,11 +195,9 @@ class ArkHandler:
                 log.info("Debug has been changed to False")
 
         if self.debug:
-            log.setLevel(logging.DEBUG)
-            log.setLevel(logging.DEBUG)
+            logging.getLogger("ArkHandler").setLevel(logging.DEBUG)
         else:
-            log.setLevel(logging.INFO)
-            log.setLevel(logging.INFO)
+            logging.getLogger("ArkHandler").setLevel(logging.INFO)
 
         self.netdownkill = settings.getint("NetDownKill", fallback=0)
         self.hook = settings.get("WebhookURL", fallback="").replace('"', "")
@@ -464,3 +476,7 @@ class ArkHandler:
             self.last_online = now
             await asyncio.sleep(120)
             self.no_internet = False
+
+    async def updater(self):
+        await check_for_updates(f"v{self.__version__}")
+        # mp.Process(target=check_for_updates, args=(self.__version__)).start()
