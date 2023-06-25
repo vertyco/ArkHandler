@@ -24,7 +24,10 @@ jobs:
         pip install pyinstaller
 
     - name: Build with PyInstaller
-      run: pyinstaller --clean main.spec
+      run: pyinstaller --debug main.spec
+
+    - name: List contents of dist folder
+      run: dir dist
 
     - name: Create Release
       id: create_release
@@ -34,6 +37,11 @@ jobs:
       with:
         tag_name: v${{ github.run_number }}
         release_name: Release v${{ github.run_number }}
+        body: |
+          ## Installation
+          1. Download the `ArkHandler.exe` file from the Assets section below.
+          2. Run the `ArkHandler.exe` file to start the application.
+
         draft: false
         prerelease: false
 
