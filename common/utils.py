@@ -1,11 +1,7 @@
 import contextlib
-import ctypes
 import json
 import logging
 import os
-import subprocess
-import sys
-import tempfile
 from configparser import ConfigParser
 from pathlib import Path
 from time import sleep
@@ -47,11 +43,8 @@ class Const:
     config = rf"{save_path}\UWPConfig\UWP"
 
 
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except Exception:
-        return False
+class ExitApplication(Exception):
+    pass
 
 
 def init_sentry(dsn: str, version: str) -> None:
@@ -70,56 +63,6 @@ def init_sentry(dsn: str, version: str) -> None:
         release=version,
         environment="windows",
     )
-
-
-async def check_for_updates(current_version: str):
-    log.debug("Checking for updates")
-    if not is_admin():
-        log.debug("Not running as admin, skipping update check")
-        return
-    url = "https://api.github.com/repos/vertyco/ArkHandler/releases/latest"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            data = await response.json()
-    if "tag_name" not in data:
-        log.debug("No releases found")
-        return
-    latest_version = data["tag_name"]
-    log.debug(f"Current: {current_version}, Latest: {latest_version}")
-
-    if str(latest_version) > str(current_version):
-        log.warning(f"UPDATE DETECTED (Current: {current_version}, Latest: {latest_version})")
-        for asset in data["assets"]:
-            if asset["name"].endswith(".exe"):
-                download_url = asset["browser_download_url"]
-                await download_new_version(download_url)
-                break
-    else:
-        log.debug("ArkHandler is on the latest version!")
-
-
-async def download_new_version(url):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            content = await response.read()
-
-    temp_dir = tempfile.gettempdir()
-    temp_file = os.path.join(temp_dir, "ArkHandler_new.exe")
-
-    with open(temp_file, "wb") as f:
-        f.write(content)
-
-    replace_and_restart(temp_file)
-
-
-def replace_and_restart(new_exe: str):
-    log.warning("Installing...")
-    current_exe = sys.executable
-    os.remove(current_exe)
-    os.rename(new_exe, current_exe)
-
-    subprocess.Popen([current_exe])
-    sys.exit()
 
 
 def get_windows(name: str):

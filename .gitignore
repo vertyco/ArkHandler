@@ -156,3 +156,6 @@ scratch.py
 *.iml
 *.log
 config.ini
+build.py
+keypack.pyu
+scratch.py

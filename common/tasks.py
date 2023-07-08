@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import subprocess
 import sys
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from datetime import datetime, timedelta
@@ -16,7 +17,6 @@ from common.logger import init_logging
 from common.scheduler import scheduler
 from common.utils import (
     Const,
-    check_for_updates,
     check_updates,
     get_rcon_info,
     init_sentry,
@@ -31,6 +31,8 @@ from common.utils import (
     update_ready,
     wipe_server,
 )
+from common.version import VERSION
+from updater import check_arkhandler_updates
 
 init_logging()
 log = logging.getLogger("ArkHandler.tasks")
@@ -39,7 +41,7 @@ parser = ConfigParser()
 
 
 class ArkHandler:
-    __version__ = "4.0.0"
+    __version__ = VERSION
 
     def __init__(self) -> None:
         # Config
@@ -51,12 +53,20 @@ class ArkHandler:
         self.autowipe = None
         self.clustewipe = None
         self.wipetimes = None
+        self.autoupdate = False
 
         # Pulled cache
         self.port = 0
         self.passwd = None
 
         # Data dir
+        self.is_exe = (
+            True if (getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")) else False
+        )
+        if self.is_exe:
+            self.mainpath = Path(os.path.dirname(os.path.abspath(sys.executable)))
+        else:
+            self.mainpath = Path(os.path.dirname(os.path.abspath(sys.executable))).parent.parent
         self.root = Path(
             os.path.abspath(os.path.dirname(__file__))
         ).parent.resolve()  # arkhandler folder
@@ -74,9 +84,6 @@ class ArkHandler:
         self.banner = Path(os.path.join(self.assets, "banner.txt")).read_text()
 
         # States
-        self.is_exe = (
-            True if (getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")) else False
-        )
         self.running = False  # Ark is running
         self.checking_updates = False  # Checking for updates
         self.updating = False  # Is updating
@@ -125,15 +132,6 @@ class ArkHandler:
             except Exception as e:
                 log.error("Failed to initialize Sentry", exc_info=e)
 
-            scheduler.add_job(
-                self.updater,
-                trigger="interval",
-                seconds=30,
-                next_run_time=now + timedelta(seconds=5),
-                id="Handler.github_update_checker",
-                max_instances=1,
-            )
-
         # Program bar animation
         asyncio.create_task(self.running_loop())
         scheduler.add_job(
@@ -175,6 +173,14 @@ class ArkHandler:
             id="Handler.check_internet",
             max_instances=1,
         )
+        scheduler.add_job(
+            self.self_updates,
+            trigger="interval",
+            seconds=30,
+            next_run_time=now + timedelta(seconds=3),
+            id="Handler.check_self_updates",
+            max_instances=1,
+        )
 
     def pull_config(self):
         log.debug("Pulling config")
@@ -205,6 +211,7 @@ class ArkHandler:
         self.gameuser = settings.get("GameUserSettingsiniPath", fallback="").replace('"', "")
         self.autowipe = settings.getboolean("AutoWipe", fallback=False)
         self.clustewipe = settings.getboolean("AlsoWipeClusterData", fallback=False)
+        self.autoupdate = settings.getboolean("AutoUpdate", fallback=True)
 
         wipetimes = settings.get("WipeTimes", fallback="").strip(r'"').split(",")
         rawtimes = [i.strip() for i in wipetimes if i.strip()]
@@ -380,7 +387,6 @@ class ArkHandler:
         self.last_update = created
 
     async def check_updates(self):
-        log.debug("Checking for updates")
         skip_conditions = [
             self.checking_updates,
             self.no_internet,
@@ -477,6 +483,15 @@ class ArkHandler:
             await asyncio.sleep(120)
             self.no_internet = False
 
-    async def updater(self):
-        await check_for_updates(f"v{self.__version__}")
-        # mp.Process(target=check_for_updates, args=(self.__version__)).start()
+    async def self_updates(self):
+        log.debug("Checking for ArkHandler updates on github")
+        url = await check_arkhandler_updates()
+        if url:
+            log.warning(f"UPDATE DETECTED!: {url}")
+            subprocess.Popen(
+                [sys.executable, "updater.py", url, self.root],
+                start_new_session=True,
+                shell=True,
+            )
+            scheduler.remove_all_jobs()
+            scheduler.shutdown(wait=False)
