@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import subprocess
 import sys
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from datetime import datetime, timedelta
@@ -32,7 +31,6 @@ from common.utils import (
     wipe_server,
 )
 from common.version import VERSION
-from updater import check_arkhandler_updates
 
 init_logging()
 log = logging.getLogger("ArkHandler.tasks")
@@ -171,14 +169,6 @@ class ArkHandler:
             seconds=30,
             next_run_time=now + timedelta(seconds=300),
             id="Handler.check_internet",
-            max_instances=1,
-        )
-        scheduler.add_job(
-            self.self_updates,
-            trigger="interval",
-            seconds=30,
-            next_run_time=now + timedelta(seconds=3),
-            id="Handler.check_self_updates",
             max_instances=1,
         )
 
@@ -482,16 +472,3 @@ class ArkHandler:
             self.last_online = now
             await asyncio.sleep(120)
             self.no_internet = False
-
-    async def self_updates(self):
-        log.debug("Checking for ArkHandler updates on github")
-        url = await check_arkhandler_updates()
-        if url:
-            log.warning(f"UPDATE DETECTED!: {url}")
-            subprocess.Popen(
-                [sys.executable, "updater.py", url, self.root],
-                start_new_session=True,
-                shell=True,
-            )
-            scheduler.remove_all_jobs()
-            scheduler.shutdown(wait=False)
