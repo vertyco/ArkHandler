@@ -65,6 +65,7 @@ class ArkHandler:
             self.mainpath = Path(os.path.dirname(os.path.abspath(sys.executable)))
         else:
             self.mainpath = Path(os.path.dirname(os.path.abspath(sys.executable))).parent.parent
+
         self.root = Path(
             os.path.abspath(os.path.dirname(__file__))
         ).parent.resolve()  # arkhandler folder
@@ -102,10 +103,11 @@ class ArkHandler:
         print(Fore.CYAN + Style.BRIGHT + self.banner)
         try:
             self.pull_config()
-        except (NoOptionError, NoSectionError) as e:
-            log.critical(f"Config Error: {e.message}\nPress ENTER to confirm and close ArkHandler")
-            input()
-            sys.exit()
+        except (NoOptionError, NoSectionError):
+            log.warning("Config file invalid! Creating a new one")
+            os.rename(self.mainpath / "config.ini", self.mainpath / "INVALID_config.ini")
+            Path(self.mainpath / "config.ini").write_text(Const.default_config)
+
         log.debug(f"Python version {sys.version}")
         if self.debug:
             info = (
@@ -174,7 +176,7 @@ class ArkHandler:
 
     def pull_config(self):
         log.debug("Pulling config")
-        conf = Path("config.ini")
+        conf = self.mainpath / "config.ini"
         if not conf.exists():
             log.warning("No config detected! Creating new one")
             conf.write_text(self.default_config)

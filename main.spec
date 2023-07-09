@@ -8,7 +8,7 @@ a = Analysis(
     ['main.py'],
     pathex=['.'],
     binaries=[],
-    datas=[('assets/*', 'assets'), ('updater.py', '.')],
+    datas=[('assets/*', 'assets')],
     hiddenimports=[],
     hookspath=['extra-hooks'],
     hooksconfig={},
