@@ -37,7 +37,7 @@ def init_logging():
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         # Running as EXE so use file log
         info_file_handler = RotatingFileHandler(
-            "logs.log", mode="a", maxBytes=1024 * 1024, backupCount=2
+            "logs.log", mode="a", maxBytes=5 * 1024 * 1024, backupCount=5
         )
         info_file_handler.setFormatter(log_format)
         info_file_handler.setLevel(logging.INFO)
@@ -45,7 +45,7 @@ def init_logging():
 
         # Debug log
         debug_file_handler = RotatingFileHandler(
-            "debug-logs.log", mode="a", maxBytes=1024 * 1024, backupCount=2
+            "debug-logs.log", mode="a", maxBytes=5 * 1024 * 1024, backupCount=5
         )
         debug_file_handler.setFormatter(log_format)
         debug_file_handler.setLevel(logging.DEBUG)

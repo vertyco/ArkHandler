@@ -274,21 +274,16 @@ class ArkHandler:
                 await send_webhook(self.hook, "Booting", "Loading server files...", 19357)
             await asyncio.sleep(10)
             call("net stop LicenseManager", stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
-            while True:
-                if not is_running():
-                    self.booting = False
-                    if not self.debug:
-                        await send_webhook(self.hook, "Boot Failed", "Trying again...", 19357)
-                    return
-                loc = await asyncio.to_thread(on_screen, self.images["loaded"])
-                if loc is None:
-                    continue
-                elif loc is False:
-                    log.error("Loaded image seems to be missing!")
-                    await asyncio.sleep(60)
-                    break
-                else:
-                    break
+
+            if not is_running():
+                self.booting = False
+                if not self.debug:
+                    await send_webhook(self.hook, "Boot Failed", "Trying again...", 19357)
+                return
+
+            # Wait up to 10 minutes for loading to finish
+            await asyncio.to_thread(on_screen, self.images["loaded"], 0.85, 600)
+
             log.info("Reboot complete")
             if not self.debug:
                 await send_webhook(

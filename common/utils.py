@@ -85,9 +85,9 @@ def get_windows(name: str):
     return windows
 
 
-def on_screen(path: str, confidence: float = 0.85):
+def on_screen(path: str, confidence: float = 0.85, search_time: int = 0):
     try:
-        return pyautogui.locateOnScreen(path, confidence=confidence)
+        return pyautogui.locateOnScreen(path, confidence=confidence, minSearchTime=search_time)
     except OSError:
         return False
 
