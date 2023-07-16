@@ -168,7 +168,7 @@ class ArkHandler:
         scheduler.add_job(
             self.check_internet,
             trigger="interval",
-            seconds=30,
+            seconds=60,
             next_run_time=now + timedelta(seconds=300),
             id="Handler.check_internet",
             max_instances=1,
@@ -441,7 +441,7 @@ class ArkHandler:
         now = datetime.now()
         failed = False
         try:
-            async with ClientSession(timeout=ClientTimeout(total=30)) as session:
+            async with ClientSession(timeout=ClientTimeout(total=10)) as session:
                 async with session.get("https://www.google.com") as res:
                     if res.status < 200 or res.status > 204:
                         failed = True
