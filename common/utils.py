@@ -299,8 +299,8 @@ def check_updates():
         log.error("Failed to check for updates!", exc_info=e)
 
 
-def sync_file(source: str, filename: str):
-    source = Path(source)
+def sync_file(origin: str, filename: str):
+    source = Path(origin)
     if not source.exists():
         log.warning(f"{filename} source doesn't exist: {source}")
         return
@@ -315,7 +315,7 @@ def sync_file(source: str, filename: str):
         with open(rf"{source}", "rb") as src:
             with open(rf"{target}", "wb") as tgt:
                 tgt.write(src.read())
-        log.info(f"Game.ini synced from {source}")
+        log.info(f"{source.name} synced from {source}")
     except Exception as e:
         log.error(f"Failed to sync {filename} file", exc_info=e)
 

@@ -140,6 +140,7 @@ class ArkHandler:
             seconds=30,
             next_run_time=now + timedelta(seconds=10),
             id="Handler.check_server",
+            max_instances=2,
         )
         scheduler.add_job(
             self.check_events,
