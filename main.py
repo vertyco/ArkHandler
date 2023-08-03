@@ -20,7 +20,6 @@ class Manager:
     async def start(self) -> None:
         scheduler.start()
         scheduler.remove_all_jobs()
-        logging.getLogger("apscheduler").setLevel(logging.WARNING)
         await self.handler.initialize()
 
     async def stop(self) -> None:

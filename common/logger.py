@@ -27,6 +27,9 @@ def init_logging():
     datefmt = "%m-%d-%Y %I:%M:%S %p"
     log_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt=datefmt)
 
+    applogger = logging.getLogger("apscheduler")
+    applogger.setLevel(logging.ERROR)
+
     # Console Log
     stdout_handler = logging.StreamHandler()
     stdout_handler.setFormatter(PrettyFormatter())
@@ -50,6 +53,7 @@ def init_logging():
         debug_file_handler.setFormatter(log_format)
         debug_file_handler.setLevel(logging.DEBUG)
         handlers.append(debug_file_handler)
+        applogger.addHandler(debug_file_handler)
 
     logging.basicConfig(
         level=logging.INFO,

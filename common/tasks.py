@@ -83,6 +83,7 @@ class ArkHandler:
         self.banner = Path(os.path.join(self.assets, "banner.txt")).read_text()
 
         # States
+        self.checking_server = False  # Checking if server is running
         self.running = False  # Ark is running
         self.checking_updates = False  # Checking for updates
         self.updating = False  # Is updating
@@ -244,9 +245,18 @@ class ArkHandler:
             os.system(cmd)
             index += 1
             index %= len(bar)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.15)
 
     async def check_server(self):
+        if self.checking_server:
+            return
+        try:
+            self.checking_server = True
+            await self._check()
+        finally:
+            self.checking_server = False
+
+    async def _check(self):
         if self.booting:
             log.debug("Booting in process, skipping server check...")
             return
