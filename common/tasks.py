@@ -170,7 +170,7 @@ class ArkHandler:
         scheduler.add_job(
             self.check_internet,
             trigger="interval",
-            seconds=60,
+            seconds=300,
             next_run_time=now + timedelta(seconds=300),
             id="Handler.check_internet",
             max_instances=1,
@@ -266,23 +266,40 @@ class ArkHandler:
                 log.info("Ark is running")
                 self.running = True
             return
-
-        # If ark is not running
-        if self.running:
-            log.warning("Ark is no longer running")
-            self.running = False
-        if any([self.installing, self.checking_updates, self.booting, self.no_internet]):
+        # Don't act while updating or no internet
+        if any([self.installing, self.checking_updates, self.no_internet]):
             return
 
-        sync_inis(self.game, self.gameuser)
-        if not self.debug:
-            await send_webhook(self.hook, "Server Down", "Beginning reboot sequence...", 16739584)
+        # If func makes it this far, then Ark is not running...
+        if self.running:
+            log.warning("Ark is no longer running, beginning reboot sequence")
+        else:
+            log.warning("Attempting to boot ark")
+
+        self.running = False
         self.booting = True
-        log.info("Beginning reboot sequence")
         try:
-            await asyncio.to_thread(start_ark, self.images)
+            if not self.debug:
+                await send_webhook(
+                    self.hook, "Server Down", "Beginning reboot sequence...", 16739584
+                )
+
+            sync_inis(self.game, self.gameuser)
+
+            # Startup should not take more than 10 minutes
+            try:
+                task = asyncio.to_thread(start_ark, self.images)
+                await asyncio.wait_for(task, timeout=600)
+            except asyncio.TimeoutError:
+                log.error("Failed to startup Ark, killing process and retrying")
+                kill()
+                await asyncio.sleep(3)
+                self.booting = False
+                return
+
             if not self.debug:
                 await send_webhook(self.hook, "Booting", "Loading server files...", 19357)
+
             await asyncio.sleep(10)
             call("net stop LicenseManager", stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
 
@@ -290,6 +307,9 @@ class ArkHandler:
                 self.booting = False
                 if not self.debug:
                     await send_webhook(self.hook, "Boot Failed", "Trying again...", 19357)
+                kill()
+                await asyncio.sleep(3)
+                self.booting = False
                 return
 
             # Wait up to 10 minutes for loading to finish
@@ -310,6 +330,7 @@ class ArkHandler:
                     16711680,
                 )
             await asyncio.sleep(600)
+            self.booting = False
             return
         finally:
             self.booting = False
@@ -452,7 +473,7 @@ class ArkHandler:
         now = datetime.now()
         failed = False
         try:
-            async with ClientSession(timeout=ClientTimeout(total=10)) as session:
+            async with ClientSession(timeout=ClientTimeout(total=15)) as session:
                 async with session.get("https://www.google.com") as res:
                     if res.status < 200 or res.status > 204:
                         failed = True
@@ -463,7 +484,7 @@ class ArkHandler:
             if not self.no_internet:
                 log.warning("Internet is down!")
             self.no_internet = True
-            td = (now - self.last_online).total_seconds()
+            td = round((now - self.last_online).total_seconds())
             if (td / 60) > self.netdownkill and is_running():
                 log.error(f"Internet has been down for {td}s, shutting down ark!")
                 if all([self.port, self.passwd, not self.booting, not self.updating]):

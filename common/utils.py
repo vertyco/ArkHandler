@@ -19,6 +19,7 @@ from pywinauto.findwindows import ElementAmbiguousError, ElementNotFoundError
 from pywinauto.timings import TimeoutError
 from rcon.source import rcon
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 log = logging.getLogger("ArkHandler.utils")
 
@@ -59,9 +60,16 @@ def init_sentry(dsn: str, version: str) -> None:
     """
     sentry_sdk.init(
         dsn=dsn,
-        integrations=[AioHttpIntegration()],
+        integrations=[
+            AioHttpIntegration(),
+            LoggingIntegration(
+                level=logging.INFO,
+                event_level=logging.ERROR,
+            ),
+        ],
         release=version,
         environment="windows",
+        ignore_errors=[KeyboardInterrupt],
     )
 
 
@@ -85,26 +93,34 @@ def get_windows(name: str):
     return windows
 
 
-def on_screen(path: str, confidence: float = 0.85, search_time: int = 0):
+def on_screen(image, confidence: float = 0.85, search_time: int = 0):
     try:
-        return pyautogui.locateOnScreen(path, confidence=confidence, minSearchTime=search_time)
+        return pyautogui.locateOnScreen(image, confidence=confidence, minSearchTime=search_time)
     except OSError:
         return False
 
 
 def click_button(button: str, images: dict):
     """Click an ark button"""
+    log.debug(f"Clicking {button} button")
     if button in images:
+        tries = 0
         while True:
+            tries += 1
             loc = on_screen(images[button])
             if loc is None:
+                sleep(1)
                 continue
             elif loc is False:
                 sleep(30)
                 break
+            elif tries > 10:
+                break
             else:
                 log.debug(f"{button} button located")
                 break
+        log.debug(f"Tried to locate image {tries} times")
+
     sleep(1.5)
     # Ark will always be 16:9 aspect ratio
     xr, yr = Const.positions[button]
@@ -148,13 +164,17 @@ def click(x: int, y: int, double: bool = False):
 def set_resolution(width: int = 1280, height: int = 720, default: bool = False):
     """Set the screen resolution"""
     if default:
+        log.debug("Setting resolution back to default")
         win32api.ChangeDisplaySettings(None, 0)
         return
-    if abs(pyautogui.size().width - width) < 10:
+    can_skip = [
+        abs(pyautogui.size().width - width) < 10,
+        abs(pyautogui.size().height - height) < 10,
+    ]
+    if all(can_skip):
+        log.debug("Resolution okay, no need to adjust")
         return
-    if abs(pyautogui.size().height - height) < 10:
-        return
-    log.warning(f"Setting resolution to {width} by {height}")
+    log.warning(f"Adjusting resolution to {width} by {height}")
     dev = pywintypes.DEVMODEType()
     dev.PelsWidth = width
     dev.PelsHeight = height
@@ -336,9 +356,11 @@ def sync_inis(game: str, gameuser: str):
 
 
 def close_teamviewer():
+    log.debug("Checking for teamviewer window")
     windows = get_windows("sponsored session")
     if not windows:
         return
+    log.debug("Closing teamviewer window")
     for i in windows:
         win32gui.SetForegroundWindow(i[0])
         win32gui.PostMessage(i[0], win32con.WM_CLOSE, 0, 0)
@@ -351,10 +373,12 @@ def launch_ark() -> None:
         os.system(Const.boot)
         sleep(15)
         if is_running():
-            return
+            break
         kill()
         if tries >= 10:
-            raise WindowsError("Ark failed to launch and may be corrupt")
+            raise WindowsError("Ark failed to launch 10 times and may be corrupt")
+
+    log.info(f"Ark launched in {tries} tries")
 
 
 def start_ark(images: dict):
@@ -363,10 +387,13 @@ def start_ark(images: dict):
     kill("WinStore.App.exe")
     set_resolution()
     if not is_running():
+        log.debug("Ark not running, launching...")
         launch_ark()
+    log.debug("Getting ark window")
     windows = get_windows("ark: survival evolved")
     if not windows:
         raise WindowsError("Failed to fetch windows for Ark")
+    log.debug("Maximizing")
     for i in windows:
         win32gui.ShowWindow(i[0], win32con.SW_MAXIMIZE)
     click_button("start", images)
