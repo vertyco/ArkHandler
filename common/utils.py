@@ -14,6 +14,7 @@ import sentry_sdk
 import win32api
 import win32con
 import win32gui
+import wmi
 from pywinauto.application import Application
 from pywinauto.findwindows import ElementAmbiguousError, ElementNotFoundError
 from pywinauto.timings import TimeoutError
@@ -71,6 +72,23 @@ def init_sentry(dsn: str, version: str) -> None:
         environment="windows",
         ignore_errors=[KeyboardInterrupt],
     )
+
+
+def get_ethernet_link_speed() -> list[tuple[str, float]]:
+    connection = wmi.WMI()
+    speeds = []
+    for adapter in connection.Win32_NetworkAdapter():
+        if not adapter.NetConnectionID:
+            continue
+        if "Ethernet" not in adapter.NetConnectionID:
+            continue
+        speed = adapter.Speed
+        if not speed:
+            continue
+        speed_mbps = round(int(speed) / (1024**2), 1)
+        speeds.append([adapter.NetConnectionID, speed_mbps])
+        log.debug(f"{adapter.NetConnectionID}'s speed: {speed_mbps} Mbps")
+    return speeds
 
 
 def get_windows(name: str):
@@ -212,19 +230,24 @@ async def send_webhook(url: str, title: str, message: str, color: int, footer: s
 
 def kill(process: str = "ShooterGame.exe"):
     """Kill a process"""
-    try:
-        [p.kill() for p in psutil.process_iter() if p.name() == process]
-    except Exception as e:
-        log.error(f"Exceeption while killing {process}", exc_info=e)
+    os.getpid()
+    for p in psutil.process_iter():
+        if p.name() != process:
+            continue
+        try:
+            p.kill()
+        except Exception as e:
+            log.error(f"Exception while killing {process}", exc_info=e)
+    else:
+        log.info(f"No processed named {process} is running")
 
 
 def is_running(process: str = "ShooterGame.exe"):
     """Check if a process is running"""
     try:
-        running = [p.name() for p in psutil.process_iter()]
+        return process in [p.name() for p in psutil.process_iter()]
     except psutil.NoSuchProcess:
         return False
-    return process in running
 
 
 def update_ready(prog: Application, name: str):
@@ -366,15 +389,18 @@ def close_teamviewer():
         win32gui.PostMessage(i[0], win32con.WM_CLOSE, 0, 0)
 
 
-def launch_ark() -> None:
+def launch_program() -> None:
     tries = 0
     while True:
         tries += 1
-        os.system(Const.boot)
+        if not is_running():
+            os.system(Const.boot)
+
         sleep(15)
+
         if is_running():
             break
-        kill()
+
         if tries >= 10:
             raise WindowsError("Ark failed to launch 10 times and may be corrupt")
 
@@ -388,7 +414,7 @@ def start_ark(images: dict):
     set_resolution()
     if not is_running():
         log.debug("Ark not running, launching...")
-        launch_ark()
+        launch_program()
     log.debug("Getting ark window")
     windows = get_windows("ark: survival evolved")
     if not windows:
@@ -402,6 +428,7 @@ def start_ark(images: dict):
     click_button("accept1", images)
     click_button("accept2", images)
     log.info("Boot macro finished, server is loading")
+    return True
 
 
 def wipe_server(include_cluster: bool = False):

@@ -5,6 +5,29 @@ from logging.handlers import RotatingFileHandler
 import colorama
 from colorama import Back, Fore, Style
 
+datefmt = "%m-%d-%Y %I:%M:%S %p"
+log_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt=datefmt)
+
+# Debug log
+debug_file_handler = RotatingFileHandler(
+    "debug-logs.log",
+    mode="a",
+    maxBytes=5 * 1024 * 1024,
+    backupCount=5,
+)
+debug_file_handler.setFormatter(log_format)
+debug_file_handler.setLevel(logging.DEBUG)
+
+# Info log
+info_file_handler = RotatingFileHandler(
+    "logs.log",
+    mode="a",
+    maxBytes=5 * 1024 * 1024,
+    backupCount=5,
+)
+info_file_handler.setFormatter(log_format)
+info_file_handler.setLevel(logging.INFO)
+
 
 class PrettyFormatter(logging.Formatter):
     colorama.init(autoreset=True)
@@ -24,39 +47,25 @@ class PrettyFormatter(logging.Formatter):
 
 
 def init_logging():
-    datefmt = "%m-%d-%Y %I:%M:%S %p"
-    log_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt=datefmt)
-
+    print("Initializing logger")
     applogger = logging.getLogger("apscheduler")
     applogger.setLevel(logging.ERROR)
 
     # Console Log
     stdout_handler = logging.StreamHandler()
     stdout_handler.setFormatter(PrettyFormatter())
-    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.setLevel(logging.INFO)
 
     handlers = [stdout_handler]
 
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         # Running as EXE so use file log
-        info_file_handler = RotatingFileHandler(
-            "logs.log", mode="a", maxBytes=5 * 1024 * 1024, backupCount=5
-        )
-        info_file_handler.setFormatter(log_format)
-        info_file_handler.setLevel(logging.INFO)
         handlers.append(info_file_handler)
-
-        # Debug log
-        debug_file_handler = RotatingFileHandler(
-            "debug-logs.log", mode="a", maxBytes=5 * 1024 * 1024, backupCount=5
-        )
-        debug_file_handler.setFormatter(log_format)
-        debug_file_handler.setLevel(logging.DEBUG)
         handlers.append(debug_file_handler)
         applogger.addHandler(debug_file_handler)
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         datefmt=datefmt,
         handlers=handlers,
     )
