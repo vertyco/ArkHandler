@@ -228,18 +228,17 @@ async def send_webhook(url: str, title: str, message: str, color: int, footer: s
         log.error(f"Failed to send {title} webhook", exc_info=e)
 
 
-def kill(process: str = "ShooterGame.exe"):
+def kill(process: str = "ShooterGame.exe") -> bool:
     """Kill a process"""
-    os.getpid()
     for p in psutil.process_iter():
         if p.name() != process:
             continue
         try:
             p.kill()
+            return True
         except Exception as e:
             log.error(f"Exception while killing {process}", exc_info=e)
-    else:
-        log.info(f"No processed named {process} is running")
+    return False
 
 
 def is_running(process: str = "ShooterGame.exe"):
@@ -379,11 +378,10 @@ def sync_inis(game: str, gameuser: str):
 
 
 def close_teamviewer():
-    log.debug("Checking for teamviewer window")
     windows = get_windows("sponsored session")
     if not windows:
         return
-    log.debug("Closing teamviewer window")
+    log.info("Closing teamviewer window")
     for i in windows:
         win32gui.SetForegroundWindow(i[0])
         win32gui.PostMessage(i[0], win32con.WM_CLOSE, 0, 0)

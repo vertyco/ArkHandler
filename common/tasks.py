@@ -255,9 +255,7 @@ class ArkHandler:
             log.debug("Booting in process, skipping server check...")
             return
 
-        log.debug("Checking if server is running")
         if is_running():
-            log.debug("Ark is running!")
             if not self.running:
                 log.info("Ark is running")
                 self.running = True
@@ -471,7 +469,6 @@ class ArkHandler:
         if self.netdownkill == 0:
             log.debug("Not checking internet since netdownkill is 0")
             return
-        log.debug("Checking internet")
         now = datetime.now()
         failed = False
         try:
