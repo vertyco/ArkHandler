@@ -111,35 +111,29 @@ def get_windows(name: str):
     return windows
 
 
-def on_screen(image, confidence: float = 0.85, search_time: int = 0):
+def on_screen(image, confidence: float = 0.85, search_time: int = 5):
     try:
         return pyautogui.locateOnScreen(image, confidence=confidence, minSearchTime=search_time)
     except OSError:
         return False
 
 
-def click_button(button: str, images: dict):
-    """Click an ark button"""
-    log.debug(f"Clicking {button} button")
+def click_button(button: str, images: dict) -> bool:
+    """Click an ark button, returns True if successful"""
+    log.info(f"Clicking {button} button")
     if button in images:
-        tries = 0
-        while True:
-            tries += 1
-            loc = on_screen(images[button])
-            if loc is None:
-                sleep(1)
-                continue
-            elif loc is False:
-                sleep(30)
-                break
-            elif tries > 10:
-                break
-            else:
-                log.debug(f"{button} button located")
-                break
-        log.debug(f"Tried to locate image {tries} times")
+        # We will wait up to 5 minutes for the image to appear
+        loc = on_screen(images[button], search_time=300)
+        if not loc:
+            log.warning(f"Failed to locate {button} button")
+            return False
 
     sleep(1.5)
+
+    if not is_running():
+        log.warning(f"Ark crashed, cancelling {button} button click")
+        return False
+
     # Ark will always be 16:9 aspect ratio
     xr, yr = Const.positions[button]
     ark_windows = get_windows("ark: survival evolved")
@@ -168,6 +162,7 @@ def click_button(button: str, images: dict):
         click(x, y, True)
     else:
         click(x, y)
+    return True
 
 
 def click(x: int, y: int, double: bool = False):
@@ -217,9 +212,7 @@ async def send_webhook(url: str, title: str, message: str, color: int, footer: s
     try:
         async with aiohttp.ClientSession() as session:
             timeout = aiohttp.ClientTimeout(total=20)
-            async with session.post(
-                url=url, data=json.dumps(data), headers=headers, timeout=timeout
-            ) as res:
+            async with session.post(url=url, data=json.dumps(data), headers=headers, timeout=timeout) as res:
                 if res.status != 204:
                     log.warning(f"Failed to send {title} webhook. status {res.status}")
                 else:
@@ -241,12 +234,19 @@ def kill(process: str = "ShooterGame.exe") -> bool:
     return False
 
 
-def is_running(process: str = "ShooterGame.exe"):
+def is_running(process: str = "ShooterGame.exe", tries: int = 1, delay: int = 0):
     """Check if a process is running"""
-    try:
-        return process in [p.name() for p in psutil.process_iter()]
-    except psutil.NoSuchProcess:
-        return False
+    # Must be true all 3 times
+    running = []
+    for __ in range(tries):
+        try:
+            processes = [p.name() for p in psutil.process_iter()]
+            running.append(process in processes)
+        except psutil.NoSuchProcess:
+            running.append(False)
+        if delay:
+            sleep(delay)
+    return any(running)
 
 
 def update_ready(prog: Application, name: str):
@@ -405,12 +405,20 @@ def launch_program() -> None:
     log.info(f"Ark launched in {tries} tries")
 
 
-def start_ark(images: dict):
+def maximize_window(app: str = "ark: survival evolved"):
+    windows = get_windows(app)
+    if not windows:
+        raise WindowsError(f"Failed to fetch windows for {app}")
+    for i in windows:
+        win32gui.ShowWindow(i[0], win32con.SW_MAXIMIZE)
+
+
+def start_ark(images: dict) -> bool:
     """Click through menu buttons to start server"""
     close_teamviewer()
     kill("WinStore.App.exe")
     set_resolution()
-    if not is_running():
+    if not is_running(tries=2, delay=1):
         log.debug("Ark not running, launching...")
         launch_program()
     log.debug("Getting ark window")
@@ -420,13 +428,15 @@ def start_ark(images: dict):
     log.debug("Maximizing")
     for i in windows:
         win32gui.ShowWindow(i[0], win32con.SW_MAXIMIZE)
-    click_button("start", images)
-    click_button("host", images)
-    click_button("run", images)
-    click_button("accept1", images)
-    click_button("accept2", images)
+
+    buttons = ["start", "host", "run", "accept1", "accept2"]
+    for b in buttons:
+        res = click_button(b, images)
+        if not res:
+            return False
+
     log.info("Boot macro finished, server is loading")
-    return True
+    return is_running(tries=2, delay=1)
 
 
 def wipe_server(include_cluster: bool = False):
