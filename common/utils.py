@@ -1,4 +1,5 @@
 import contextlib
+import ctypes
 import json
 import logging
 import os
@@ -23,6 +24,11 @@ from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 log = logging.getLogger("ArkHandler.utils")
+
+ctypes.windll.user32.BringWindowToTop.argtypes = [ctypes.wintypes.HWND]
+ctypes.windll.user32.BringWindowToTop.restype = ctypes.wintypes.BOOL
+ctypes.windll.user32.ShowWindow.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
+ctypes.windll.user32.ShowWindow.restype = ctypes.wintypes.BOOL
 
 
 class Const:
@@ -91,8 +97,11 @@ def get_ethernet_link_speed() -> list[tuple[str, float]]:
     return speeds
 
 
-def get_windows(name: str):
-    """Get all windows associated with the provided string"""
+def get_windows(name: str, exclude: bool = False):
+    """Get all windows associated with the provided string
+
+    If exclude is True, it will return all windows that do not match the string
+    """
 
     def callback(hwnd, opened):
         # Handle, Title, Placement, Position(left, top, right bottom)
@@ -107,7 +116,10 @@ def get_windows(name: str):
 
     windows = []
     win32gui.EnumWindows(callback, windows)
-    windows = [i for i in windows if name.lower() in i[1].lower()]
+    if exclude:
+        windows = [i for i in windows if name.lower() not in i[1].lower()]
+    else:
+        windows = [i for i in windows if name.lower() in i[1].lower()]
     return windows
 
 
@@ -120,6 +132,12 @@ def on_screen(image, confidence: float = 0.85, search_time: int = 5):
 
 def click_button(button: str, images: dict) -> bool:
     """Click an ark button, returns True if successful"""
+    # Bring ark to the front
+    maximize_window()
+    if not is_running():
+        log.warning(f"Ark crashed, cancelling {button} button click")
+        return False
+
     log.info(f"Clicking {button} button")
     if button in images:
         # We will wait up to 5 minutes for the image to appear
@@ -158,6 +176,7 @@ def click_button(button: str, images: dict) -> bool:
         y_offset += int(diff * 0.01)
     # Get x and y for click
     x, y = int((right - left) * xr + left), int((bottom - top) * yr + top + y_offset)
+    maximize_window()
     if button == "start":
         click(x, y, True)
     else:
@@ -405,12 +424,29 @@ def launch_program() -> None:
     log.info(f"Ark launched in {tries} tries")
 
 
-def maximize_window(app: str = "ark: survival evolved"):
-    windows = get_windows(app)
+def maximize_window():
+    """Mazimize ark and minimize other windows"""
+    # First check if any windows that arent ark are in the foreground
+    # If there are any windows that are on top of ark, minimize them
+    windows = get_windows("ark: survival evolved", exclude=True)
+    if windows:
+        for window in windows:
+            hwnd = window[0]
+            # If this window is in the foreground or on top of ark, minimize it
+            if win32gui.GetForegroundWindow() == hwnd or win32gui.GetWindow(hwnd, win32con.GW_HWNDPREV) == hwnd:
+                log.debug(f"Minimizing window: {window[1]}")
+                win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+
+    # Then maximize ark
+    log.debug("Maximizng window")
+    windows = get_windows("ark: survival evolved")
     if not windows:
-        raise WindowsError(f"Failed to fetch windows for {app}")
-    for i in windows:
-        win32gui.ShowWindow(i[0], win32con.SW_MAXIMIZE)
+        raise WindowsError("Failed to fetch windows for Ark")
+
+    # Iterate through all the ARK application windows
+    for window in windows:
+        hwnd = window[0]  # Get handle to window
+        win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
 
 
 def start_ark(images: dict) -> bool:
@@ -421,14 +457,8 @@ def start_ark(images: dict) -> bool:
     if not is_running(tries=2, delay=1):
         log.debug("Ark not running, launching...")
         launch_program()
-    log.debug("Getting ark window")
-    windows = get_windows("ark: survival evolved")
-    if not windows:
-        raise WindowsError("Failed to fetch windows for Ark")
-    log.debug("Maximizing")
-    for i in windows:
-        win32gui.ShowWindow(i[0], win32con.SW_MAXIMIZE)
-
+    log.debug("Maximizing ark window")
+    maximize_window()
     buttons = ["start", "host", "run", "accept1", "accept2"]
     for b in buttons:
         res = click_button(b, images)
