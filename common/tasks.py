@@ -447,7 +447,7 @@ class ArkHandler:
             log.error("Update check failed!", exc_info=e)
         finally:
             self.checking_updates = False
-            if self.current_action.endswith("updates"):
+            if self.current_action and self.current_action.endswith("updates"):
                 self.current_action = None
 
     async def check_wipe(self):
