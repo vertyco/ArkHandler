@@ -10,6 +10,7 @@ from time import sleep
 import aiohttp
 import psutil
 import pyautogui
+import pyscreeze
 import pywintypes
 import sentry_sdk
 import win32api
@@ -29,6 +30,7 @@ ctypes.windll.user32.BringWindowToTop.argtypes = [ctypes.wintypes.HWND]
 ctypes.windll.user32.BringWindowToTop.restype = ctypes.wintypes.BOOL
 ctypes.windll.user32.ShowWindow.argtypes = [ctypes.wintypes.HWND, ctypes.c_int]
 ctypes.windll.user32.ShowWindow.restype = ctypes.wintypes.BOOL
+pyscreeze.USE_IMAGE_NOT_FOUND_EXCEPTION = False
 
 
 class Const:
@@ -127,6 +129,9 @@ def on_screen(image, confidence: float = 0.85, search_time: int = 5):
     try:
         return pyautogui.locateOnScreen(image, confidence=confidence, minSearchTime=search_time)
     except OSError:
+        return False
+    except Exception as e:
+        log.info(f"Failed to locate {image}", exc_info=e)
         return False
 
 
@@ -242,15 +247,18 @@ async def send_webhook(url: str, title: str, message: str, color: int, footer: s
 
 def kill(process: str = "ShooterGame.exe") -> bool:
     """Kill a process"""
-    for p in psutil.process_iter():
-        if p.name() != process:
-            continue
-        try:
-            p.kill()
-            return True
-        except Exception as e:
-            log.error(f"Exception while killing {process}", exc_info=e)
-    return False
+    try:
+        for p in psutil.process_iter():
+            if p.name() != process:
+                continue
+            try:
+                p.kill()
+                return True
+            except Exception as e:
+                log.error(f"Exception while killing {process}", exc_info=e)
+        return False
+    except psutil.NoSuchProcess:
+        return False
 
 
 def is_running(process: str = "ShooterGame.exe", tries: int = 1, delay: int = 0):

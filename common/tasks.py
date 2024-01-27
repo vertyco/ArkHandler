@@ -432,6 +432,7 @@ class ArkHandler:
         self.checking_updates = True
         if not self.current_action:
             self.current_action = "checking for updates"
+
         try:
             kill("WinStore.App.exe")
             await asyncio.sleep(5)
