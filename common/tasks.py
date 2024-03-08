@@ -11,7 +11,6 @@ from colorama import Fore, Style
 
 from common import const, helpers, version
 from common.config import Conf
-from common.overlay import OverlayApp
 from common.scheduler import scheduler
 
 log = logging.getLogger("arkhandler.tasks")
@@ -30,7 +29,6 @@ class ArkHandler:
 
     def __init__(self) -> None:
         self.conf: Conf = Conf.load(str(const.CONF_PATH))
-        self.app = OverlayApp()
 
         # Main states
         self.current_action = ""  # Used for window title
@@ -84,8 +82,6 @@ class ArkHandler:
         if const.IS_EXE:
             asyncio.create_task(self.window_title())
 
-        asyncio.create_task(self.start_overlay())
-
         scheduler.add_job(
             func=self.watchdog,
             trigger="interval",
@@ -127,9 +123,6 @@ class ArkHandler:
                 max_instances=1,
                 next_run_time=datetime.now() + timedelta(seconds=600),
             )
-
-    async def start_overlay(self):
-        await asyncio.to_thread(self.app.start)
 
     async def window_title(self):
         def _run():
