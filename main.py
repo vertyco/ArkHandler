@@ -3,11 +3,13 @@ import logging
 import os
 import sys
 
+from common.config import Conf
+from common.const import CONF_PATH, DEFAULT_CONF_TEXT
+from common.helpers import set_resolution
 from common.scheduler import scheduler
 from common.tasks import ArkHandler
-from common.utils import set_resolution
 
-log = logging.getLogger("ArkHandler.main")
+log = logging.getLogger("arkhandler.main")
 
 
 class Manager:
@@ -56,4 +58,17 @@ class Manager:
 
 
 if __name__ == "__main__":
+    if not CONF_PATH.exists():
+        log.error("Config file not found, created a new one.")
+        CONF_PATH.write_text(DEFAULT_CONF_TEXT)
+        input("Please configure and restart.. ")
+        exit()
+
+    try:
+        Conf.load(str(CONF_PATH))
+    except Exception as e:
+        log.error("Failed to load config file", exc_info=e)
+        input("Failed to load config file, check the logs for details. Press Enter to exit.")
+        exit()
+
     Manager.run()
