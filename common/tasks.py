@@ -54,6 +54,7 @@ class ArkHandler:
             f"Python version: {sys.version}\n"
             f"ArkHandler version: {self.__version__}\n"
             f"Root: {const.ROOT_PATH}\n"
+            f"Meta: {const.META_PATH}\n"
             f"Config: {const.CONF_PATH}\n"
             f"Debug: {self.conf.debug}\n"
             f"Auto Update: {self.conf.auto_update}\n"
@@ -85,7 +86,7 @@ class ArkHandler:
         scheduler.add_job(
             func=self.watchdog,
             trigger="interval",
-            seconds=10,
+            seconds=30,
             id="watchdog",
             name="Watchdog",
             replace_existing=True,
@@ -169,7 +170,7 @@ class ArkHandler:
 
         # Server is either not running or running but not loaded
         if self.running:
-            log.warning("Server is not loaded, rebooting in 5 seconds...")
+            log.warning("Game is running but server isnt loaded, rebooting in 5 seconds...")
         else:
             log.warning("Server is not running, rebooting in 5 seconds...")
         await asyncio.sleep(5)

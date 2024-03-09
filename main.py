@@ -59,7 +59,7 @@ class Manager:
 
 if __name__ == "__main__":
     if not CONF_PATH.exists():
-        log.error("Config file not found, created a new one.")
+        log.warning("Config file not found, created a new one.")
         CONF_PATH.write_text(DEFAULT_CONF_TEXT)
         input("Please configure and restart.. ")
         exit()

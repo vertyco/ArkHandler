@@ -1,14 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 block_cipher = None
 
+datas = [
+    ('assets/*', 'assets'),
+    ('resolutions/', 'resolutions'),
+]
 
 a = Analysis(
     ['main.py'],
     pathex=['.'],
     binaries=[],
-    datas=[('assets/*', 'assets')],
+    datas=datas,
     hiddenimports=[],
     hookspath=['extra-hooks'],
     hooksconfig={},

@@ -13,8 +13,10 @@ if IS_EXE:
 else:
     ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 
-ASSET_PATH = ROOT_PATH / "assets"
-IMAGE_PATH = ROOT_PATH / "resolutions"
+META_PATH = Path(os.path.abspath(os.path.dirname(__file__))).parent
+
+ASSET_PATH = META_PATH / "assets"
+IMAGE_PATH = META_PATH / "resolutions"
 CONF_PATH = ROOT_PATH / "config.ini"
 DEFAULT_CONF_TEXT = (ASSET_PATH / "default_config.ini").read_text()
 BANNER_TEXT = (ASSET_PATH / "banner.txt").read_text()

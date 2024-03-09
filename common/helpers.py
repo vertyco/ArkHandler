@@ -15,6 +15,7 @@ import numpy as np
 import psutil
 import pyautogui
 import pyscreeze
+import pywinauto
 import pywintypes
 import sentry_sdk
 import win32api
@@ -221,9 +222,21 @@ def get_positions() -> dict[str, tuple[float, float, float, float]]:
 
 
 def maximize_window(app_name: str = "ARK: Survival Evolved") -> None:
+    """Maximize the window of the given app name and bring it to the front."""
     log.debug(f"Maximizing {app_name} window...")
     handle = win32gui.FindWindow(None, app_name)
+    if not handle:
+        return
     win32gui.ShowWindow(handle, win32con.SW_MAXIMIZE)
+    bring_to_front()
+
+
+def bring_to_front(app_name: str = "ARK: Survival Evolved") -> None:
+    window = pywinauto.findwindows.find_window(title=app_name)
+    if window:
+        log.debug(f"Setting focus to {app_name} window: {window}")
+        app = Application().connect(handle=window)
+        app.top_window().set_focus()
 
 
 def set_resolution(width: int = 1280, height: int = 720, default: bool = False):
@@ -303,6 +316,10 @@ def start_server() -> bool:
         sleep(5)
     # Launch Ark
     os.system(const.BOOT_COMMAND)
+    sleep(5)
+    if not is_running():
+        log.error("Failed to launch the Ark: Survival Evolved!")
+        return False
     images = get_images()
     buttons = {
         "start": 300,
