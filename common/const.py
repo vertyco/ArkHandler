@@ -33,7 +33,7 @@ INI_PATH = SAVE_PATH / "UWPConfig" / "UWP"
 
 BOOT_COMMAND = rf"explorer.exe shell:appsFolder\{APP}!AppARKSurvivalEvolved"
 MS_BOOT_COMMAND = r"explorer.exe shell:appsFolder\Microsoft.WindowsStore_8wekyb3d8bbwe!App"
-DSN_FALLBACK = "https://3e9a63ad63852b34a4bc1556c6a96e64@sentry.vertyco.net/10"
+DSN_FALLBACK = "https://49f9dec01c25b19eda9eaf449a017bf9@sentry.vertyco.net/5"
 
 BAR = [
     "▱▱▱▱▱▱▱",

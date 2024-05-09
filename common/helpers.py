@@ -164,7 +164,8 @@ def get_game_state(confidence: float = 0.85, minSearchTime: float = 0.0) -> str 
 
 
 def check_for_state(state: str, confidence: float = 0.85, minSearchTime: float = 0.0) -> bool:
-    maximize_window()
+    minimize_window()  # Minimize MS store if it's open
+    maximize_window()  # Make sure ark is maximized
     images = get_images()
     image = images[state]
     loc = pyautogui.locateOnScreen(image, confidence=confidence, minSearchTime=minSearchTime, grayscale=True)
@@ -221,14 +222,25 @@ def get_positions() -> dict[str, tuple[float, float, float, float]]:
     return json.loads(const.POSITIONS_PATH.read_text())
 
 
+def minimize_window(app_name: str = "Microsoft Store") -> None:
+    """Minimize the window of the given app name."""
+    log.debug(f"Minimizing {app_name} window...")
+    handle = win32gui.FindWindow(None, app_name)
+    if not handle:
+        return
+    with suppress(Exception):
+        win32gui.ShowWindow(handle, win32con.SW_MINIMIZE)
+
+
 def maximize_window(app_name: str = "ARK: Survival Evolved") -> None:
     """Maximize the window of the given app name and bring it to the front."""
     log.debug(f"Maximizing {app_name} window...")
     handle = win32gui.FindWindow(None, app_name)
     if not handle:
         return
-    win32gui.ShowWindow(handle, win32con.SW_MAXIMIZE)
-    bring_to_front()
+    with suppress(Exception):
+        win32gui.ShowWindow(handle, win32con.SW_MAXIMIZE)
+        bring_to_front()
 
 
 def bring_to_front(app_name: str = "ARK: Survival Evolved") -> None:
@@ -305,7 +317,7 @@ def check_ms_store() -> Application | None:
     except (ElementAmbiguousError, ElementNotFoundError):
         kill("WinStore.App.exe")
         return
-
+    minimize_window()
     return app
 
 
@@ -348,6 +360,7 @@ def start_server() -> bool:
             return False
         coords = pyautogui.center(loc)
         log.info(f"Clicking {button_name} button...")
+        sleep(2)
         if button_name == "start":
             pyautogui.doubleClick(coords[0], coords[1])
         else:

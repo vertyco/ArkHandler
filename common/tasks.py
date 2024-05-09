@@ -117,12 +117,12 @@ class ArkHandler:
             scheduler.add_job(
                 func=self.check_updates,
                 trigger="interval",
-                seconds=300,
+                seconds=600,
                 id="update_checker",
                 name="Update Checker",
                 replace_existing=True,
                 max_instances=1,
-                next_run_time=datetime.now() + timedelta(seconds=600),
+                next_run_time=datetime.now() + timedelta(minutes=30),
             )
 
     async def window_title(self):
@@ -160,8 +160,7 @@ class ArkHandler:
     async def _check_server(self):
         """Check for server crashes and restart"""
         running = await asyncio.to_thread(helpers.is_running)
-        loaded = await asyncio.to_thread(helpers.check_for_state, "loaded")
-        if running and loaded:
+        if running:
             # Server is running and loaded
             if not self.running:
                 log.info("Server is up and running.")
