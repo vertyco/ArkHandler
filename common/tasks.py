@@ -384,7 +384,10 @@ class ArkHandler:
             self.current_action = "checking for updates"
 
         try:
-            await asyncio.to_thread(helpers.check_ms_store)
+            app = await asyncio.to_thread(helpers.check_ms_store)
+            if app is not None:
+                await asyncio.sleep(5)
+                await asyncio.to_thread(helpers.minimize_window)
         except Exception as e:
             log.error("Failed to check MS Store for updates", exc_info=e)
             helpers.kill("WinStore.App.exe")

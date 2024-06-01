@@ -38,6 +38,8 @@ log = logging.getLogger("arkhandler.utils")
 
 pyscreeze.USE_IMAGE_NOT_FOUND_EXCEPTION = False
 
+_images: dict[str, np.ndarray] = None
+
 
 def init_sentry(dsn: str, version: str) -> None:
     sentry_sdk.init(
@@ -94,19 +96,20 @@ async def send_webhook(url: str, title: str, message: str, color: int, footer: s
 async def internet_connected() -> bool:
     async def _check(session: aiohttp.ClientSession, url: str) -> bool:
         try:
-            async with session.get(url, timeout=5) as response:
+            async with session.get(url, timeout=6) as response:
                 return response.status == 200
         except Exception:
             return False
 
-    urls = ["http://1.1.1.1", "http://8.8.8.8"]
-    async with aiohttp.ClientSession() as session:
-        tasks = [asyncio.ensure_future(_check(session, url)) for url in urls]
-        done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+    for _ in range(3):
+        urls = ["http://1.1.1.1", "http://8.8.8.8"]
+        async with aiohttp.ClientSession() as session:
+            tasks = [asyncio.ensure_future(_check(session, url)) for url in urls]
+            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
 
-        for task in done:
-            return task.result()
-        return False
+            for task in done:
+                return task.result()
+    return False
 
 
 def get_ethernet_link_speed() -> list[tuple[str, float]]:
@@ -127,6 +130,10 @@ def get_ethernet_link_speed() -> list[tuple[str, float]]:
 
 
 def get_images() -> dict[str, np.ndarray]:
+    global _images
+    if _images is not None:
+        return _images
+
     size = pyautogui.size()
     res_path = const.IMAGE_PATH / f"{size[0]}x{size[1]}"
     if not res_path.exists():
@@ -139,6 +146,7 @@ def get_images() -> dict[str, np.ndarray]:
         "accept2": cv2.imread(str(res_path / "accept2.PNG")),
         "loaded": cv2.imread(str(res_path / "loaded.PNG")),
     }
+    _images = images
     return images
 
 
@@ -317,7 +325,6 @@ def check_ms_store() -> Application | None:
     except (ElementAmbiguousError, ElementNotFoundError):
         kill("WinStore.App.exe")
         return
-    minimize_window()
     return app
 
 
