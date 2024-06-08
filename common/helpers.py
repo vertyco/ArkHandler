@@ -38,7 +38,7 @@ log = logging.getLogger("arkhandler.utils")
 
 pyscreeze.USE_IMAGE_NOT_FOUND_EXCEPTION = False
 
-_images: dict[str, np.ndarray] = None
+_images: dict[str, np.ndarray] | None = None
 
 
 def init_sentry(dsn: str, version: str) -> None:
@@ -361,7 +361,7 @@ def start_server() -> bool:
         if not found:
             log.warning(f"Could not find {button_name} button")
             return False
-        loc = pyautogui.locateOnScreen(image, confidence=0.85, minSearchTime=1, grayscale=True)
+        loc = pyautogui.locateOnScreen(image, confidence=0.93, minSearchTime=1, grayscale=True)
         if not loc:
             log.error(f"Failed to locate {button_name} button")
             return False
