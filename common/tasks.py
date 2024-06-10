@@ -227,7 +227,7 @@ class ArkHandler:
         log.info("Waiting for server to finish loading")
         loaded = await asyncio.to_thread(helpers.wait_for_state, "loaded", 900)
         if not loaded:
-            log.error("Server never finished loading, waiting 5 minutes before trying again")
+            log.warning("Server never finished loading, waiting 5 minutes before trying again")
             await helpers.send_webhook(
                 url=self.conf.webhook_url,
                 title="Boot Failed",

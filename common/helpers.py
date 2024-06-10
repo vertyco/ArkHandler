@@ -23,9 +23,11 @@ import win32con
 import win32gui
 import wmi
 from comtypes import COMError
+from PIL import Image
 from pywinauto import Application, ElementAmbiguousError, ElementNotFoundError
 from pywinauto.timings import TimeoutError
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
+from sentry_sdk.integrations.asyncio import AsyncioIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 try:
@@ -46,7 +48,8 @@ def init_sentry(dsn: str, version: str) -> None:
         dsn=dsn,
         integrations=[
             AioHttpIntegration(),
-            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+            AsyncioIntegration(),
+            LoggingIntegration(),
         ],
         release=version,
         environment=sys.platform,
@@ -171,11 +174,22 @@ def get_game_state(confidence: float = 0.85, minSearchTime: float = 0.0) -> str 
     return None
 
 
-def check_for_state(state: str, confidence: float = 0.85, minSearchTime: float = 0.0) -> bool:
-    minimize_window()  # Minimize MS store if it's open
-    maximize_window()  # Make sure ark is maximized
+def check_for_state(state: str, confidence: float = 0.93, minSearchTime: float = 0.0) -> bool:
+    minimize_window("Microsoft Store")  # Minimize MS store if it's open
+    maximize_window("ARK: Survival Evolved")  # Make sure ark is maximized
     images = get_images()
     image = images[state]
+    required_types = [
+        isinstance(image, np.ndarray),
+        isinstance(image, str),
+        isinstance(image, Image.Image),
+    ]
+    if not any(required_types):
+        log.warning(f"Invalid image type for {state} state: {type(image)}... reloading images!")
+        global _images
+        _images = None
+        images = get_images()
+        image = images[state]
     loc = pyautogui.locateOnScreen(image, confidence=confidence, minSearchTime=minSearchTime, grayscale=True)
     return True if loc else False
 
@@ -341,13 +355,13 @@ def start_server() -> bool:
         return False
     images = get_images()
     buttons = {
-        "start": 300,
-        "host": 300,
-        "run": 120,
-        "accept1": 15,
-        "accept2": 15,
+        "start": (300, 12),
+        "host": (300, 5),
+        "run": (120, 2),
+        "accept1": (15, 1),
+        "accept2": (15, 1),
     }
-    for button_name, min_search_time in buttons.items():
+    for button_name, (min_search_time, wait_after_clicking) in buttons.items():
         if not is_running():
             log.error(f"Server may have crashed while waiting for {button_name} button")
             return False
@@ -367,11 +381,19 @@ def start_server() -> bool:
             return False
         coords = pyautogui.center(loc)
         log.info(f"Clicking {button_name} button...")
-        sleep(2)
+        sleep(wait_after_clicking / 2)
         if button_name == "start":
             pyautogui.doubleClick(coords[0], coords[1])
         else:
             pyautogui.click(coords[0], coords[1])
+        sleep(wait_after_clicking)
+        # Check if the same button is still visible
+        if check_for_state(button_name):
+            # Try clicking again:
+            log.error(f"Failed to click {button_name} button, trying again...")
+            pyautogui.click(coords[0], coords[1])
+            sleep(wait_after_clicking)
+
     return is_running()
 
 
