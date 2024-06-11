@@ -4,8 +4,9 @@ import pyautogui
 import win32gui
 
 try:
-    from common import helpers
+    from common import const, helpers
 except ModuleNotFoundError:
+    import const
     import helpers
 
 
@@ -31,7 +32,6 @@ class OverlayApp:
         except Exception as e:
             if "Invalid window handle" in str(e):
                 rect = None
-        images = helpers.get_images()
         if rect:
             # Unpack the window's position and size
             # x, y, x1, y1
@@ -78,7 +78,7 @@ class OverlayApp:
                 button_width = int(inner_width * w_ratio)
                 button_height = int(inner_height * h_ratio)
 
-                loc = pyautogui.locateOnScreen(images[button_name], confidence=0.85, grayscale=True)
+                loc = pyautogui.locateOnScreen(const.IMAGES[button_name], confidence=0.85, grayscale=True)
                 if loc:
                     print(f"{button_name}: {loc}")
                     self.canvas.create_rectangle(

@@ -10,8 +10,6 @@ from pathlib import Path
 from time import sleep
 
 import aiohttp
-import cv2
-import numpy as np
 import psutil
 import pyautogui
 import pyscreeze
@@ -23,7 +21,6 @@ import win32con
 import win32gui
 import wmi
 from comtypes import COMError
-from PIL import Image
 from pywinauto import Application, ElementAmbiguousError, ElementNotFoundError
 from pywinauto.timings import TimeoutError
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
@@ -39,8 +36,6 @@ log = logging.getLogger("arkhandler.utils")
 
 
 pyscreeze.USE_IMAGE_NOT_FOUND_EXCEPTION = False
-
-_images: dict[str, np.ndarray] | None = None
 
 
 def init_sentry(dsn: str, version: str) -> None:
@@ -132,27 +127,6 @@ def get_ethernet_link_speed() -> list[tuple[str, float]]:
     return speeds
 
 
-def get_images() -> dict[str, np.ndarray]:
-    global _images
-    if _images is not None:
-        return _images
-
-    size = pyautogui.size()
-    res_path = const.IMAGE_PATH / f"{size[0]}x{size[1]}"
-    if not res_path.exists():
-        raise FileNotFoundError(f"Resolution folder not found: {res_path}")
-    images = {
-        "start": cv2.imread(str(res_path / "start.PNG")),
-        "host": cv2.imread(str(res_path / "host.PNG")),
-        "run": cv2.imread(str(res_path / "run.PNG")),
-        "accept1": cv2.imread(str(res_path / "accept1.PNG")),
-        "accept2": cv2.imread(str(res_path / "accept2.PNG")),
-        "loaded": cv2.imread(str(res_path / "loaded.PNG")),
-    }
-    _images = images
-    return images
-
-
 def get_game_state(confidence: float = 0.85, minSearchTime: float = 0.0) -> str | None:
     """
     Return the current state of the game
@@ -165,7 +139,7 @@ def get_game_state(confidence: float = 0.85, minSearchTime: float = 0.0) -> str 
     - None: unknown state, or the game is not running
     """
     maximize_window()
-    images = get_images()
+    images = const.IMAGES
     for state, image in images.items():
         with suppress(pyscreeze.ImageNotFoundException, pyautogui.ImageNotFoundException):
             loc = pyautogui.locateOnScreen(image, confidence=confidence, minSearchTime=minSearchTime, grayscale=True)
@@ -177,19 +151,7 @@ def get_game_state(confidence: float = 0.85, minSearchTime: float = 0.0) -> str 
 def check_for_state(state: str, confidence: float = 0.93, minSearchTime: float = 0.0) -> bool:
     minimize_window("Microsoft Store")  # Minimize MS store if it's open
     maximize_window("ARK: Survival Evolved")  # Make sure ark is maximized
-    images = get_images()
-    image = images[state]
-    required_types = [
-        isinstance(image, np.ndarray),
-        isinstance(image, str),
-        isinstance(image, Image.Image),
-    ]
-    if not any(required_types):
-        log.warning(f"Invalid image type for {state} state: {type(image)}... reloading images!")
-        global _images
-        _images = None
-        images = get_images()
-        image = images[state]
+    image = const.IMAGES[state]
     loc = pyautogui.locateOnScreen(image, confidence=confidence, minSearchTime=minSearchTime, grayscale=True)
     return True if loc else False
 
@@ -353,7 +315,6 @@ def start_server() -> bool:
     if not is_running():
         log.error("Failed to launch the Ark: Survival Evolved!")
         return False
-    images = get_images()
     buttons = {
         "start": (300, 12),
         "host": (300, 5),
@@ -365,7 +326,7 @@ def start_server() -> bool:
         if not is_running():
             log.error(f"Server may have crashed while waiting for {button_name} button")
             return False
-        image = images[button_name]
+        image = const.IMAGES[button_name]
         log.info(f"Waiting for {button_name} button to appear...")
         # Close teamviewer popup if it's open
         close_teamviewer()

@@ -4,7 +4,7 @@ import os
 import sys
 
 from common.config import Conf
-from common.const import CONF_PATH, DEFAULT_CONF_TEXT
+from common.const import CONF_PATH, DEFAULT_CONF_TEXT, RESOLUTION_DIR
 from common.helpers import set_resolution
 from common.scheduler import scheduler
 from common.tasks import ArkHandler
@@ -69,6 +69,11 @@ if __name__ == "__main__":
     except Exception as e:
         log.error("Failed to load config file", exc_info=e)
         input("Failed to load config file, check the logs for details. Press Enter to exit.")
+        exit()
+
+    if not RESOLUTION_DIR.exists():
+        log.error("Current screen resolution not supported!")
+        input("ArkHandler only supports 1080x720 and 2560x1440. Press Enter to exit.")
         exit()
 
     Manager.run()
