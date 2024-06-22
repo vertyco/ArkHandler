@@ -4,9 +4,8 @@ import pyautogui
 import win32gui
 
 try:
-    from common import const, helpers
+    from common import helpers
 except ModuleNotFoundError:
-    import const
     import helpers
 
 
@@ -63,6 +62,7 @@ class OverlayApp:
             # self.canvas.create_rectangle(10, 3, width - 10, height - 10, outline="red", width=5)
             # Draw each of the button outlines
             positions = helpers.get_positions()
+            images = helpers.get_images()
             for button_name, (x_ratio, y_ratio, w_ratio, h_ratio) in positions.items():
                 # if self.game_state in positions and button_name != self.game_state:
                 #     continue
@@ -78,7 +78,7 @@ class OverlayApp:
                 button_width = int(inner_width * w_ratio)
                 button_height = int(inner_height * h_ratio)
 
-                loc = pyautogui.locateOnScreen(const.IMAGES[button_name], confidence=0.85, grayscale=True)
+                loc = pyautogui.locateOnScreen(images[button_name], confidence=0.85, grayscale=True)
                 if loc:
                     print(f"{button_name}: {loc}")
                     self.canvas.create_rectangle(

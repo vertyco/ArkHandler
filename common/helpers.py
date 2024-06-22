@@ -10,6 +10,8 @@ from pathlib import Path
 from time import sleep
 
 import aiohttp
+import cv2
+import numpy as np
 import psutil
 import pyautogui
 import pyscreeze
@@ -49,7 +51,17 @@ def init_sentry(dsn: str, version: str) -> None:
         release=version,
         environment=sys.platform,
         ignore_errors=[KeyboardInterrupt],
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
     )
+
+
+def get_images() -> dict[str, np.ndarray]:
+    images: dict[str, np.ndarray] = {}
+    for name, imagebytes in const.IMAGE_BYTES.items():
+        image_array = np.frombuffer(imagebytes, dtype=np.uint8)
+        images[name] = cv2.imdecode(image_array, cv2.IMREAD_GRAYSCALE)
+    return images
 
 
 def sync_file(source: Path) -> bool:
@@ -139,7 +151,7 @@ def get_game_state(confidence: float = 0.85, minSearchTime: float = 0.0) -> str 
     - None: unknown state, or the game is not running
     """
     maximize_window()
-    images = const.IMAGES
+    images = get_images()
     for state, image in images.items():
         with suppress(pyscreeze.ImageNotFoundException, pyautogui.ImageNotFoundException):
             loc = pyautogui.locateOnScreen(image, confidence=confidence, minSearchTime=minSearchTime, grayscale=True)
@@ -151,7 +163,7 @@ def get_game_state(confidence: float = 0.85, minSearchTime: float = 0.0) -> str 
 def check_for_state(state: str, confidence: float = 0.93, minSearchTime: float = 0.0) -> bool:
     minimize_window("Microsoft Store")  # Minimize MS store if it's open
     maximize_window("ARK: Survival Evolved")  # Make sure ark is maximized
-    image = const.IMAGES[state]
+    image = get_images()[state]
     loc = pyautogui.locateOnScreen(image, confidence=confidence, minSearchTime=minSearchTime, grayscale=True)
     return True if loc else False
 
@@ -322,11 +334,12 @@ def start_server() -> bool:
         "accept1": (15, 1),
         "accept2": (15, 1),
     }
+    images = get_images()
     for button_name, (min_search_time, wait_after_clicking) in buttons.items():
         if not is_running():
             log.error(f"Server may have crashed while waiting for {button_name} button")
             return False
-        image = const.IMAGES[button_name]
+        image = images[button_name]
         log.info(f"Waiting for {button_name} button to appear...")
         # Close teamviewer popup if it's open
         close_teamviewer()

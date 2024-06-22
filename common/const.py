@@ -2,8 +2,6 @@ import os
 import sys
 from pathlib import Path
 
-import cv2
-import numpy as np
 import pyautogui
 
 SUPPORTED_RESOLUTIONS = [
@@ -58,13 +56,14 @@ BAR = [
 
 SCREEN_WIDTH, SCREEN_HEIGHT = pyautogui.size()
 RESOLUTION_DIR = IMAGE_PATH / f"{SCREEN_WIDTH}x{SCREEN_HEIGHT}"
-IMAGES: dict[str, np.ndarray] = None
+
+IMAGE_BYTES: dict[str, bytes] = None
 if RESOLUTION_DIR.exists():
-    IMAGES: dict[str, np.ndarray] = {
-        "start": cv2.imread(str(RESOLUTION_DIR / "start.PNG")),
-        "host": cv2.imread(str(RESOLUTION_DIR / "host.PNG")),
-        "run": cv2.imread(str(RESOLUTION_DIR / "run.PNG")),
-        "accept1": cv2.imread(str(RESOLUTION_DIR / "accept1.PNG")),
-        "accept2": cv2.imread(str(RESOLUTION_DIR / "accept2.PNG")),
-        "loaded": cv2.imread(str(RESOLUTION_DIR / "loaded.PNG")),
+    IMAGE_BYTES: dict[str, bytes] = {
+        "start": (RESOLUTION_DIR / "start.PNG").read_bytes(),
+        "host": (RESOLUTION_DIR / "host.PNG").read_bytes(),
+        "run": (RESOLUTION_DIR / "run.PNG").read_bytes(),
+        "accept1": (RESOLUTION_DIR / "accept1.PNG").read_bytes(),
+        "accept2": (RESOLUTION_DIR / "accept2.PNG").read_bytes(),
+        "loaded": (RESOLUTION_DIR / "loaded.PNG").read_bytes(),
     }

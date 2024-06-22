@@ -35,6 +35,7 @@ class Manager:
         loop = asyncio.ProactorEventLoop()
         asyncio.set_event_loop(loop)
         arkhandler = cls(loop)
+        logging.getLogger("apscheduler").setLevel(logging.CRITICAL)
 
         try:
             loop.create_task(arkhandler.start())
