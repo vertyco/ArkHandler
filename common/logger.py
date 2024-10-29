@@ -9,22 +9,12 @@ datefmt = "%m-%d-%Y %I:%M:%S %p"
 log_format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s", datefmt=datefmt)
 
 # Debug log
-debug_file_handler = RotatingFileHandler(
-    "debug-logs.log",
-    mode="a",
-    maxBytes=5 * 1024 * 1024,
-    backupCount=5,
-)
+debug_file_handler = RotatingFileHandler("debug-logs.log", mode="a", maxBytes=5 * 1024 * 1024, backupCount=0)
 debug_file_handler.setFormatter(log_format)
 debug_file_handler.setLevel(logging.DEBUG)
 
 # Info log
-info_file_handler = RotatingFileHandler(
-    "logs.log",
-    mode="a",
-    maxBytes=5 * 1024 * 1024,
-    backupCount=5,
-)
+info_file_handler = RotatingFileHandler("logs.log", mode="a", maxBytes=5 * 1024 * 1024, backupCount=1)
 info_file_handler.setFormatter(log_format)
 info_file_handler.setLevel(logging.INFO)
 

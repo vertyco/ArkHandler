@@ -3,6 +3,7 @@ import contextlib
 import json
 import logging
 import os
+import ssl
 import sys
 from contextlib import suppress
 from datetime import datetime
@@ -90,35 +91,57 @@ async def send_webhook(url: str, title: str, message: str, color: int, footer: s
         "avatar_url": "https://i.imgur.com/Wv5SsBo.png",
         "embeds": [em],
     }
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0",
+        "Content-Type": "application/json",
+    }
     try:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
         async with aiohttp.ClientSession() as session:
             timeout = aiohttp.ClientTimeout(total=20)
-            async with session.post(url=url, data=json.dumps(data), headers=headers, timeout=timeout) as res:
+            async with session.post(
+                url=url,
+                data=json.dumps(data),
+                headers=headers,
+                timeout=timeout,
+                ssl=ssl_context,
+            ) as res:
                 if res.status != 204:
                     log.warning(f"Failed to send {title} webhook. status {res.status}")
                 else:
                     log.debug(f"{title} webhook sent successfully")
+    except ssl.SSLCertVerificationError:
+        log.error(f"Failed to send {title} webhook due to SSL error")
     except Exception as e:
         log.error(f"Failed to send {title} webhook", exc_info=e)
 
 
 async def internet_connected() -> bool:
+    """Check if the host machine is connected to the internet."""
+
     async def _check(session: aiohttp.ClientSession, url: str) -> bool:
         try:
-            async with session.get(url, timeout=6) as response:
-                return response.status == 200
-        except Exception:
-            return False
+            async with session.get(url, timeout=10) as response:
+                return response.status in (200, 201, 202, 203, 204)
+        except aiohttp.ClientError as e:
+            log.debug(f"Client error when checking {url}: {e}")
+        except asyncio.TimeoutError:
+            log.debug(f"Timeout when checking {url}")
+        except Exception as e:
+            log.error(f"Unexpected error when checking {url}: {e}")
+        return False
 
+    urls = ["https://www.google.com", "https://www.cloudflare.com"]
     for _ in range(3):
-        urls = ["http://1.1.1.1", "http://8.8.8.8"]
         async with aiohttp.ClientSession() as session:
-            tasks = [asyncio.ensure_future(_check(session, url)) for url in urls]
-            done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+            tasks = [_check(session, url) for url in urls]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            for task in done:
-                return task.result()
+            if any(results):
+                return True
+
     return False
 
 

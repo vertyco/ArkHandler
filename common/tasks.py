@@ -96,34 +96,35 @@ class ArkHandler:
         scheduler.add_job(
             func=self.check_internet,
             trigger="interval",
-            seconds=10,
+            seconds=60,
             id="internet_checker",
             name="Internet Checker",
             replace_existing=True,
             max_instances=1,
-            next_run_time=datetime.now() + timedelta(seconds=10),
+            next_run_time=datetime.now() + timedelta(seconds=60),
         )
-        if self.conf.auto_update:
-            scheduler.add_job(
-                func=self.check_events,
-                trigger="interval",
-                seconds=15,
-                id="event_watcher",
-                name="Event Watcher",
-                replace_existing=True,
-                max_instances=1,
-                next_run_time=datetime.now() + timedelta(seconds=800),
-            )
-            scheduler.add_job(
-                func=self.check_updates,
-                trigger="interval",
-                seconds=600,
-                id="update_checker",
-                name="Update Checker",
-                replace_existing=True,
-                max_instances=1,
-                next_run_time=datetime.now() + timedelta(minutes=30),
-            )
+        # Disabled since Ark no longer gets updates
+        # if self.conf.auto_update:
+        #     scheduler.add_job(
+        #         func=self.check_events,
+        #         trigger="interval",
+        #         seconds=15,
+        #         id="event_watcher",
+        #         name="Event Watcher",
+        #         replace_existing=True,
+        #         max_instances=1,
+        #         next_run_time=datetime.now() + timedelta(seconds=800),
+        #     )
+        #     scheduler.add_job(
+        #         func=self.check_updates,
+        #         trigger="interval",
+        #         seconds=600,
+        #         id="update_checker",
+        #         name="Update Checker",
+        #         replace_existing=True,
+        #         max_instances=1,
+        #         next_run_time=datetime.now() + timedelta(minutes=30),
+        #     )
 
     async def window_title(self):
         def _run():
@@ -194,14 +195,18 @@ class ArkHandler:
             log.info(f"Syncing {self.conf.gameusersettings_ini}...")
             helpers.sync_file(self.conf.gameusersettings_ini_path)
 
+        self.current_action = "killing MS Store"
+        helpers.kill("WinStore.App.exe")
+
         self.current_action = "booting [starting server]"
         try:
             running = await asyncio.to_thread(helpers.start_server)
         except Exception as e:
-            log.error("Failed to start server, trying again in 1 minute", exc_info=e)
+            log.error("Error attempting to start server, trying again in 1 minute", exc_info=e)
             running = False
 
         if not running:
+            log.warning("Failed to start server, trying again in 1 minute")
             await helpers.send_webhook(
                 url=self.conf.webhook_url,
                 title="Boot Failed",
@@ -211,6 +216,7 @@ class ArkHandler:
             self.current_action = "boot failed [sleeping before retry]"
             await asyncio.sleep(60)
             self.booting = False
+            helpers.kill()
             return
 
         await helpers.send_webhook(
@@ -237,6 +243,7 @@ class ArkHandler:
             self.current_action = "boot failed [sleeping before retry]"
             await asyncio.sleep(300)
             self.booting = False
+            helpers.kill()
             return
 
         log.info("Boot sequence complete.")
