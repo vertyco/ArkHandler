@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import ssl
-import sys
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
@@ -12,23 +11,22 @@ from time import sleep
 
 import aiohttp
 import cv2
+import ntsecuritycon as con
 import numpy as np
 import psutil
 import pyautogui
 import pyscreeze
 import pywinauto
 import pywintypes
-import sentry_sdk
 import win32api
 import win32con
 import win32gui
+import win32security
 import wmi
 from comtypes import COMError
+from pyinjector import inject
 from pywinauto import Application, ElementAmbiguousError, ElementNotFoundError
 from pywinauto.timings import TimeoutError
-from sentry_sdk.integrations.aiohttp import AioHttpIntegration
-from sentry_sdk.integrations.asyncio import AsyncioIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
 
 try:
     from common import const
@@ -39,22 +37,6 @@ log = logging.getLogger("arkhandler.utils")
 
 
 pyscreeze.USE_IMAGE_NOT_FOUND_EXCEPTION = False
-
-
-def init_sentry(dsn: str, version: str) -> None:
-    sentry_sdk.init(
-        dsn=dsn,
-        integrations=[
-            AioHttpIntegration(),
-            AsyncioIntegration(),
-            LoggingIntegration(),
-        ],
-        release=version,
-        environment=sys.platform,
-        ignore_errors=[KeyboardInterrupt],
-        traces_sample_rate=1.0,
-        profiles_sample_rate=1.0,
-    )
 
 
 def get_images() -> dict[str, np.ndarray]:
@@ -201,7 +183,7 @@ def wait_for_state(state: str, timeout: int) -> bool:
         maximize_window()
         if check_for_state(state):
             return True
-        sleep(1)
+        sleep(5)
     return False
 
 
@@ -235,6 +217,25 @@ def is_running(process: str = "ShooterGame.exe") -> bool:
             pass
         sleep(0.1)
     return False
+
+
+def wait_till_running(process: str = "ShooterGame.exe", timeout: int = 10) -> bool:
+    now = datetime.now()
+    while (datetime.now() - now).total_seconds() < timeout:
+        if is_running(process):
+            return True
+        sleep(1)
+    return False
+
+
+def get_pid(process: str = "ShooterGame.exe") -> int:
+    try:
+        for proc in psutil.process_iter():
+            if proc.name() == process:
+                return proc.pid
+    except psutil.NoSuchProcess:
+        pass
+    return 0
 
 
 def get_positions() -> dict[str, tuple[float, float, float, float]]:
@@ -337,6 +338,37 @@ def check_ms_store() -> Application | None:
         kill("WinStore.App.exe")
         return
     return app
+
+
+def inject_dll(pid: int, dll_path: Path | str) -> bool:
+    try:
+        inject(pid, str(dll_path))
+        return True
+    except Exception as e:
+        log.error(f"Failed to inject DLL into Ark: {e}", exc_info=e)
+        return False
+
+
+def apply_permissions_to_dll(dll_path: Path | str) -> bool:
+    everyone, domain, type = win32security.LookupAccountName("", "ALL APPLICATION PACKAGES")
+    sd = win32security.GetFileSecurity(str(dll_path), win32security.DACL_SECURITY_INFORMATION)
+    dacl = sd.GetSecurityDescriptorDacl()
+
+    dacl.AddAccessAllowedAce(win32con.ACL_REVISION, con.FILE_GENERIC_READ | con.FILE_GENERIC_EXECUTE, everyone)
+    sd.SetSecurityDescriptorDacl(1, dacl, 0)
+    win32security.SetFileSecurity(str(dll_path), win32security.DACL_SECURITY_INFORMATION, sd)
+
+    # Confirm that the permissions were set correctly
+    sd = win32security.GetFileSecurity(str(dll_path), win32security.DACL_SECURITY_INFORMATION)
+    dacl = sd.GetSecurityDescriptorDacl()
+
+    for i in range(dacl.GetAceCount()):
+        rev, access, usersid = dacl.GetAce(i)
+        user, domain, type = win32security.LookupAccountSid(None, usersid)
+        if user == "ALL APPLICATION PACKAGES":
+            return True
+
+    return False
 
 
 def start_server() -> bool:

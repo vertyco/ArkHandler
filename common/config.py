@@ -12,7 +12,6 @@ class Conf(BaseModel):
     game_ini: str
     gameusersettings_ini: str
     sentry_dsn: str
-    auto_update: bool
     debug: bool
 
     @property
@@ -33,14 +32,13 @@ class Conf(BaseModel):
             "game_ini": settings.get("GameiniPath", fallback="").replace('"', ""),
             "gameusersettings_ini": settings.get("GameUserSettingsiniPath", fallback="").replace('"', ""),
             "sentry_dsn": settings.get("SentryDSN", fallback=const.DSN_FALLBACK).replace('"', ""),
-            "auto_update": settings.getboolean("AutoUpdate", fallback=True),
             "debug": settings.getboolean("Debug", fallback=False),
         }
         if config["game_ini"]:
             if Path(config["game_ini"]).is_dir():
                 config["game_ini"] = str(Path(config["game_ini"]) / "Game.ini")
             if not Path(config["game_ini"]).exists():
-                raise FileNotFoundError(f"game_ini not found: {config['game_ini']}")
+                raise FileNotFoundError(f"game.ini not found: {config['game_ini']}")
         if config["gameusersettings_ini"]:
             if Path(config["gameusersettings_ini"]).is_dir():
                 config["gameusersettings_ini"] = str(Path(config["gameusersettings_ini"]) / "GameUserSettings.ini")

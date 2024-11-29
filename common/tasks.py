@@ -3,13 +3,13 @@ import logging
 import os
 import sys
 from datetime import datetime, timedelta
+from itertools import cycle
 from subprocess import DEVNULL, call
 from time import sleep
 
-import win32evtlog
 from colorama import Fore, Style
 
-from common import const, helpers, version
+from common import const, helpers, logger, version
 from common.config import Conf
 from common.scheduler import scheduler
 
@@ -20,8 +20,6 @@ class ArkHandler:
     """
     Task Loops:
     - Watchdog: Check for server crashes and restart
-    - Update: Check for server updates and install
-    - Events: Checks windows events for server updates taking place
     - Internet: Check for internet connection
     """
 
@@ -57,7 +55,6 @@ class ArkHandler:
             f"Meta: {const.META_PATH}\n"
             f"Config: {const.CONF_PATH}\n"
             f"Debug: {self.conf.debug}\n"
-            f"Auto Update: {self.conf.auto_update}\n"
         )
         if self.conf.webhook_url:
             info += f"Webhook: {self.conf.webhook_url}\n"
@@ -74,7 +71,7 @@ class ArkHandler:
         print(Fore.CYAN + info.strip())
 
         # Initialize Sentry
-        helpers.init_sentry(self.conf.sentry_dsn, self.__version__)
+        logger.init_sentry(self.conf.sentry_dsn, self.__version__)
 
         # Check resolution
         helpers.check_resolution()
@@ -86,7 +83,7 @@ class ArkHandler:
         scheduler.add_job(
             func=self.watchdog,
             trigger="interval",
-            seconds=30,
+            seconds=7,
             id="watchdog",
             name="Watchdog",
             replace_existing=True,
@@ -103,38 +100,15 @@ class ArkHandler:
             max_instances=1,
             next_run_time=datetime.now() + timedelta(seconds=60),
         )
-        # Disabled since Ark no longer gets updates
-        # if self.conf.auto_update:
-        #     scheduler.add_job(
-        #         func=self.check_events,
-        #         trigger="interval",
-        #         seconds=15,
-        #         id="event_watcher",
-        #         name="Event Watcher",
-        #         replace_existing=True,
-        #         max_instances=1,
-        #         next_run_time=datetime.now() + timedelta(seconds=800),
-        #     )
-        #     scheduler.add_job(
-        #         func=self.check_updates,
-        #         trigger="interval",
-        #         seconds=600,
-        #         id="update_checker",
-        #         name="Update Checker",
-        #         replace_existing=True,
-        #         max_instances=1,
-        #         next_run_time=datetime.now() + timedelta(minutes=30),
-        #     )
 
     async def window_title(self):
         def _run():
-            index = 0
+            bar_cycle = cycle(const.BAR)
             while True:
-                cmd = f"title ArkHandler {self.__version__} {const.BAR[index]}"
+                cmd = f"title ArkHandler {self.__version__} {next(bar_cycle)}"
                 if self.current_action:
                     cmd += f" {self.current_action}"
                 os.system(cmd)
-                index = (index + 1) % len(const.BAR)
                 sleep(0.15)
 
         await asyncio.to_thread(_run)
@@ -199,12 +173,8 @@ class ArkHandler:
         helpers.kill("WinStore.App.exe")
 
         self.current_action = "booting [starting server]"
-        try:
-            running = await asyncio.to_thread(helpers.start_server)
-        except Exception as e:
-            log.error("Error attempting to start server, trying again in 1 minute", exc_info=e)
-            running = False
-
+        os.system(const.BOOT_COMMAND)
+        running = await asyncio.to_thread(helpers.wait_till_running)
         if not running:
             log.warning("Failed to start server, trying again in 1 minute")
             await helpers.send_webhook(
@@ -215,8 +185,31 @@ class ArkHandler:
             )
             self.current_action = "boot failed [sleeping before retry]"
             await asyncio.sleep(60)
-            self.booting = False
             helpers.kill()
+            self.booting = False
+            return
+
+        # Set the permissions on the DLL
+        perms = await asyncio.to_thread(helpers.apply_permissions_to_dll, const.DLL_PATH)
+        log.info("Set permissions on startup dll: %s", perms)
+
+        # Get the PID of ShooterGame.exe
+        pid = await asyncio.to_thread(helpers.get_pid)
+        log.info("Ark is running with PID %s, injecting startup dll...", pid)
+
+        # Inject the DLL
+        injected = await asyncio.to_thread(helpers.inject_dll, pid, const.DLL_PATH)
+        log.info("Injected dll: %s", injected)
+
+        # Wait 3 seconds then check if process is still running
+        await asyncio.sleep(3)
+        running = await asyncio.to_thread(helpers.is_running)
+        if not running:
+            log.error("Ark is not running after injection, killing and retrying")
+            helpers.kill()
+            self.current_action = "dll injection failed [sleeping before retry]"
+            await asyncio.sleep(5)
+            self.booting = False
             return
 
         await helpers.send_webhook(
@@ -228,7 +221,7 @@ class ArkHandler:
         await asyncio.sleep(10)
         self.current_action = "booting [stopping license manager]"
         call("net stop LicenseManager", stdin=DEVNULL, stdout=DEVNULL, stderr=DEVNULL)
-
+        await asyncio.sleep(10)
         # Wait up to 15 minutes for loading to finish
         log.info("Waiting for server to finish loading")
         loaded = await asyncio.to_thread(helpers.wait_for_state, "loaded", 900)
@@ -285,121 +278,3 @@ class ArkHandler:
 
         self.connected = True
         self.last_connected = datetime.now()
-
-    async def check_events(self):
-        """Check events and update states accordingly"""
-
-        def _check():
-            server = "localhost"
-            logtype = "System"
-            handle = win32evtlog.OpenEventLog(server, logtype)
-            flags = win32evtlog.EVENTLOG_SEQUENTIAL_READ | win32evtlog.EVENTLOG_BACKWARDS_READ
-            events = win32evtlog.ReadEventLog(handle, flags, 0)
-            return events
-
-        events = await asyncio.to_thread(_check)
-        if not events:
-            log.info("No events to pull")
-            return
-
-        now = datetime.now()
-
-        if not self.current_action:
-            self.current_action = "checking events"
-
-        for event in events:
-            event_data = event.StringInserts
-            if not event_data:
-                continue
-            if "-StudioWildcard" in str(event_data[0]):
-                text = str(event_data[0])
-                break
-        else:
-            return
-
-        created = event.TimeGenerated
-        eid = event.EventID
-        if self.last_event is None:
-            self.last_event = (eid, created)
-            return
-
-        if eid == self.last_event[0]:
-            return
-
-        td = (now - created).total_seconds()
-        if td > 3600:
-            log.info(f"Found event {eid} but it's too old ({td} seconds)")
-            self.last_event = (eid, created)
-            return
-
-        # A new event has been found
-        self.last_event = (eid, created)
-        if eid == 44:
-            log.warning(f"Download started: {text}")
-            self.downloading = True
-            self.installing = False
-            self.current_action = "downloading update"
-            await helpers.send_webhook(
-                url=self.conf.webhook_url,
-                title="Download Detected!",
-                message=const.DOWNLOAD,
-                color=14177041,
-                footer=f"File: {text}",
-            )
-        elif eid == 43:
-            log.warning(f"Install started: {text}")
-            self.downloading = False
-            self.installing = True
-            self.current_action = "installing update"
-            await helpers.send_webhook(
-                url=self.conf.webhook_url,
-                title="Installing!",
-                message=const.INSTALL,
-                color=1127128,
-                footer=f"File: {text}",
-            )
-        elif eid == 19:
-            log.warning(f"Install finished: {text}")
-            self.downloading = False
-            self.installing = False
-            self.current_action = "update complete!"
-            await helpers.send_webhook(
-                url=self.conf.webhook_url,
-                title="Update Complete!",
-                message=const.INSTALL,
-                color=65314,
-                footer=f"File: {text}",
-            )
-        else:
-            log.error(f"Unknown event {eid}: {text}")
-            if self.current_action == "checking events":
-                self.current_action = ""
-            return
-
-    async def check_updates(self):
-        skip = [
-            self.booting,
-            self.checking_updates,
-            self.downloading,
-            self.installing,
-            not self.conf.auto_update,
-        ]
-        if any(skip):
-            return
-        self.checking_updates = True
-        if not self.current_action:
-            self.current_action = "checking for updates"
-
-        try:
-            app = await asyncio.to_thread(helpers.check_ms_store)
-            if app is not None:
-                await asyncio.sleep(5)
-                await asyncio.to_thread(helpers.minimize_window)
-        except Exception as e:
-            log.error("Failed to check MS Store for updates", exc_info=e)
-            helpers.kill("WinStore.App.exe")
-            return
-        finally:
-            self.checking_updates = False
-            if self.current_action == "checking for updates":
-                self.current_action = ""

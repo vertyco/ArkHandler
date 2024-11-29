@@ -5,6 +5,7 @@ block_cipher = None
 datas = [
     ('assets/*', 'assets'),
     ('resolutions/', 'resolutions'),
+    ('data/*', 'data'),
 ]
 
 a = Analysis(

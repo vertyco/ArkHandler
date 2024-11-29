@@ -5,6 +5,7 @@ opencv-contrib-python-headless==4.9.0.80
 psutil==5.9.8
 PyAutoGUI==0.9.54
 pydantic==2.6.3
+pyinjector==1.3.0
 pywin32-ctypes==0.2.0
 pywinauto==0.6.8
 rcon==2.4.4

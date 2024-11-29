@@ -49,7 +49,6 @@ class Manager:
             set_resolution(default=True)
             loop.run_until_complete(arkhandler.stop())
             loop.run_until_complete(loop.shutdown_asyncgens())
-            loop.run_until_complete(asyncio.sleep(1))
             asyncio.set_event_loop(None)
             loop.stop()
             loop.close()

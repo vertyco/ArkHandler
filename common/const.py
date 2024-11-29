@@ -16,6 +16,7 @@ else:
     ROOT_PATH = Path(os.path.dirname(os.path.abspath(__file__))).parent
 
 META_PATH = Path(os.path.abspath(os.path.dirname(__file__))).parent
+DLL_PATH = META_PATH / "data" / "startark.dll"
 
 ASSET_PATH = META_PATH / "assets"
 IMAGE_PATH = META_PATH / "resolutions"
