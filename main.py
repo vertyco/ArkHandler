@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     if not RESOLUTION_DIR.exists():
         log.error("Current screen resolution not supported!")
-        input("ArkHandler only supports 1080x720 and 2560x1440. Press Enter to exit.")
+        input("ArkHandler only supports 1280x720, 1920x1080 and 2560x1440. Press Enter to exit.")
         exit()
 
     Manager.run()

@@ -6,6 +6,7 @@ import pyautogui
 
 SUPPORTED_RESOLUTIONS = [
     (1280, 720),
+    (1920, 1080),
     (2560, 1440),
 ]
 

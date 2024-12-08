@@ -144,9 +144,9 @@ class ArkHandler:
 
         # Server is either not running or running but not loaded
         if self.running:
-            log.warning("Game is running but server isnt loaded, rebooting in 5 seconds...")
+            log.warning("Server has stopped running, rebooting in 5 seconds...")
         else:
-            log.warning("Server is not running, rebooting in 5 seconds...")
+            log.warning("Server is not running, starting up in 5 seconds...")
         await asyncio.sleep(5)
 
         # If we're here, the server needs to be rebooted

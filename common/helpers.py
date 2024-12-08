@@ -33,7 +33,7 @@ try:
 except ModuleNotFoundError:
     import const
 
-log = logging.getLogger("arkhandler.utils")
+log = logging.getLogger("arkhandler.helpers")
 
 
 pyscreeze.USE_IMAGE_NOT_FOUND_EXCEPTION = False
@@ -117,7 +117,9 @@ async def internet_connected() -> bool:
 
     urls = ["https://www.google.com", "https://www.cloudflare.com"]
     for _ in range(3):
-        async with aiohttp.ClientSession() as session:
+        # Increase the header size limit
+        connector = aiohttp.TCPConnector(limit_per_host=10, limit=100, enable_cleanup_closed=True)
+        async with aiohttp.ClientSession(connector=connector, headers={"User-Agent": "Mozilla/5.0"}) as session:
             tasks = [_check(session, url) for url in urls]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -179,8 +181,11 @@ def wait_for_state(state: str, timeout: int) -> bool:
         if not is_running():
             log.warning("Cant wait for state if the server is not running")
             return False
-        close_teamviewer()
-        maximize_window()
+        # If time left is less than 5 seconds, close teamviewer and maximize the window just in case it's minimized
+        time_left = timeout - (datetime.now() - start).total_seconds()
+        if time_left < 5:
+            close_teamviewer()
+            maximize_window()
         if check_for_state(state):
             return True
         sleep(5)
