@@ -189,6 +189,14 @@ class ArkHandler:
             self.booting = False
             return
 
+        # Ensure dll exists
+        if not const.DLL_PATH.exists():
+            # Rewrite the DLL
+            const.DLL_PATH.parent.mkdir(parents=True, exist_ok=True)
+            const.DLL_PATH.write_bytes(const.DLL_BYTES)
+            # Set the permissions on the DLL
+            const.DLL_PATH.chmod(0o777)
+
         # Set the permissions on the DLL
         perms = await asyncio.to_thread(helpers.apply_permissions_to_dll, const.DLL_PATH)
         log.info("Set permissions on startup dll: %s", perms)

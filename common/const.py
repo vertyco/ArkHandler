@@ -18,6 +18,7 @@ else:
 
 META_PATH = Path(os.path.abspath(os.path.dirname(__file__))).parent
 DLL_PATH = META_PATH / "data" / "startark.dll"
+DLL_BYTES = DLL_PATH.read_bytes()
 
 ASSET_PATH = META_PATH / "assets"
 IMAGE_PATH = META_PATH / "resolutions"
